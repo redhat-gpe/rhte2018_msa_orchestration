@@ -145,7 +145,6 @@ TODO: insert diagram
 
 The message payload is kept deliberately very simple. Messages are JSON objects, with a generic structure:
 
-[source,json]
 ----
 {
   "messageType": "RideRequestedEvent",
@@ -274,7 +273,6 @@ The Spring framework has excellent support for JMS. It provides the `JMsTemplate
 
 The `amqp-10-jms-spring-boot` autostarter is configured with properties (`amqphub.amqp10jms.\*` and `amqphub.amqp10jms.pool.\*`). For the use case in the lab some additional configuration is required to support transacted sessions, and shared, durable subscribers. This is done in the `PassengerServiceJmsConfiguration` class, which provides custom configured instances of `JMSTemplate` and `DefaultJmsListenerContainerFactory`:
 
-[source,java]
 ----
     @Bean
     public DefaultJmsListenerContainerFactory jmsListenerContainerFactory(
@@ -298,7 +296,7 @@ The `amqp-10-jms-spring-boot` autostarter is configured with properties (`amqphu
 
 Sending messages is simply a matter of using the appropriate method on the `JMSTemplate` instance. If the payload is `String`, a JMS `TextMessage` is sent.
 
-[source,java]
+
 ----
     @Autowired
     private JmsTemplate jmsTemplate;
@@ -320,7 +318,6 @@ Sending messages is simply a matter of using the appropriate method on the `JMST
 
 To consume messages, a method is annotated with `@JmsListener` specifying the destination name, and the subscription name in case of shared and/or durable subscriptions. The method will be called whenever a message is consumed from the topic or queue, with the payload of the message (a `String` in the case of a `TextMessage`) as parameter.
 
-[source,java]
 ----
     @JmsListener(destination = "${listener.destination.driver-assigned}", subscription= "${listener.subscription.driver-assigned}")
     public void processMessage(String messageAsJson) {
@@ -354,7 +351,6 @@ In other words, if you use the AMQP Bridge component, once the bridge is set up,
 
 The AMQP bridge is configured in the `start` method of the `ConsumerVerticle`:
 
-[source,java]
 ----
     @Override
     public void start(Future<Void> startFuture) throws Exception {
@@ -393,7 +389,6 @@ The AMQP bridge is configured in the `start` method of the `ConsumerVerticle`:
 
 Once the bridge is started, a consumer is created. The consumer is associated with a handler which is called when the consumer receives an AMQP message. The AMQP message is automatically transformed to a Vert.x `Message<JsonObject>` by the AMQP bridge:
 
-[source,java]
 ----
     private void bridgeStarted() {
         MessageConsumer<JsonObject> consumer = bridge.<JsonObject>createConsumer(config().getString("amqp.consumer.driver-command"))
@@ -408,7 +403,6 @@ Once the bridge is started, a consumer is created. The consumer is associated wi
 
 The different elements of the JSON object correspond to various sections of the AMQP message:
 
-[source, json]
 ----
 {
   "body": "{\"messageType\":\"AssignDriverCommand\",\"id\":\"cb2b7216-832c-4b28-86eb-981ec3dd2637\",\"traceId\":\"03af65ee-d7c2-43ef-a9cb-343c519137cb\",\"sender\":\"DispatchService\",\"timestamp\":1535012681551,\"payload\":{\"rideId\":\"f7b32455-86da-46a5-9263-221f6d96459d\",\"pickup\":\"North Carolina Museum Of Art, Raleigh, NC 27607\",\"destination\":\"Wake Forest Historical Museum, Wake Forest, NC 27587\",\"price\":26.89,\"passengerId\":\"passenger188\"}}",
@@ -433,7 +427,6 @@ The different elements of the JSON object correspond to various sections of the 
 
 In the ProducerVerticle, the brige is initialized in the same way. Producers are registered with the bridge as follows:
 
-[source,java]
 ----
     private void bridgeStarted() {
         driverEventProducer = bridge.<JsonObject>createProducer(config().getString("amqp.producer.driver-event")).exceptionHandler(this::handleExceptions);
@@ -444,7 +437,6 @@ In the ProducerVerticle, the brige is initialized in the same way. Producers are
 
 The producer takes a `JsonObject` as payload. The structure of the JsonObject should reflect the structure of the AMQP message.
 
-[source,java]
 ----
     private void sendMessageToTopic(JsonObject body, MessageProducer<JsonObject> messageProducer) {
         JsonObject amqpMsg = new JsonObject();
@@ -491,7 +483,6 @@ You will find here two alternatives to provision EnMasse in the OpenShift enviro
 . In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
 . Create a project on OpenShift. The project name has to be unique within the OpenShift cluster, so use `enmasse-` suffixed with your name or another unique identifier.
 +
-[source,text]
 ----
 $ export $ENMASSE_PRJ=enmasse-<unique suffix>
 $ oc new-project $ENMASSE_PRJ
@@ -499,21 +490,18 @@ $ oc new-project $ENMASSE_PRJ
 * Note the usage of the `ENMASSE_PRJ` environment variable. As long as you stay in the same terminal window, you can reuse the environment variable in other commands. This should make copy-paste from the lab instructions more convenient.
 . Create service accounts for the EnMasse address space controller and agent controller:
 +
-[source,text]
 ----
 $ oc create sa enmasse-admin -n $ENMASSE_PRJ
 $ oc create sa address-space-admin -n $ENMASSE_PRJ
 ----
 . Give project admin rights to the `enmasse-admin` and `address-space-admin` service accounts
 +
-[source,text]
 ----
 $ oc adm policy add-role-to-user admin system:serviceaccount:$ENMASSE_PRJ:enmasse-admin -n $ENMASSE_PRJ
 $ oc adm policy add-role-to-user admin system:serviceaccount:$ENMASSE_PRJ:address-space-admin -n $ENMASSE_PRJ
 ----
 . Create a self-signed certificate for the `none` authentication service
 +
-[source,text]
 ----
 $ openssl genrsa -out /tmp/none-auth.ca.key 2048
 $ openssl req -new -x509 -days 1100 -key /tmp/none-auth.ca.key -subj "/O=io.enmasse/CN=none-authservice.$ENMASSE_PRJ.svc.cluster.local" -out /tmp/none-auth.ca.crt
@@ -522,20 +510,17 @@ $ openssl x509 -req -extfile <(printf subjectAltName=DNS:none-authservice.$ENMAS
 ----
 . Create a secret with the certificate and the private key:
 +
-[source,text]
 ----
 $ oc create secret tls none-authservice-cert --cert="/tmp/none-auth.crt" --key="/tmp/none-auth.key" -n $ENMASSE_PRJ
 ----
 . Create the `none` authentication service.
 +
-[source,text]
 ----
 $ oc apply -f openshift/enmasse/none-authservice/service.yaml -n $ENMASSE_PRJ
 $ oc apply -f openshift/enmasse/none-authservice/deployment.yaml -n $ENMASSE_PRJ
 ----
 . Create a self-signed certificate for the EnMasse broker
 +
-[source,text]
 ----
 $ openssl genrsa -out /tmp/messaging.ca.key 2048
 $ openssl req -new -x509 -days 1100 -key /tmp/messaging.ca.key -subj "/O=io.enmasse/CN=messaging.$ENMASSE_PRJ.svc.cluster.local" -out /tmp/messaging.ca.crt
@@ -544,20 +529,17 @@ $ openssl x509 -req -extfile <(printf subjectAltName=DNS:messaging.$ENMASSE_PRJ.
 ----
 . Create a secret with the certificate and the private key:
 +
-[source,text]
 ----
 $ oc create secret tls external-certs-messaging --cert="/tmp/messaging.crt" --key="/tmp/messaging.key" -n $ENMASSE_PRJ
 ----
 . Create the brokered plan and resource configuration
 +
-[source,text]
 ----
 $ oc apply -f openshift/enmasse/resource-definitions/resource-definitions.yaml -n $ENMASSE_PRJ
 $ oc apply -f openshift/enmasse/plans/brokered-plans.yaml -n $ENMASSE_PRJ
 ----
 . Deploy the address space controller
 +
-[source,text]
 ----
 $ oc apply -f openshift/enmasse//address-space-controller/address-space-definitions.yaml -n $ENMASSE_PRJ
 $ oc apply -f openshift/enmasse//address-space-controller/deployment.yaml -n $ENMASSE_PRJ
@@ -567,7 +549,6 @@ $ oc apply -f openshift/enmasse//address-space-controller/deployment.yaml -n $EN
 image::images/enmasse_openshift_project.png[]
 . Create the address space.
 +
-[source,text]
 ----
 $ oc process -f openshift/enmasse/templates/address-space.yaml -p NAME=brokered-default -p NAMESPACE=$ENMASSE_PRJ -p TYPE=brokered -p PLAN=unlimited-brokered -p AUTHENTICATION_SERVICE=none | oc apply -n $ENMASSE_PRJ -f -
 ----
@@ -579,14 +560,12 @@ $ oc process -f openshift/enmasse/templates/address-space.yaml -p NAME=brokered-
 image::images/enmasse_openshift_project_2.png[]
 . Create the address for the `topic-ride-event` topic. One way to create addresses in EnMasse is by creating a configmap.
 +
-[source,text]
 ----
 $ oc process -f openshift/enmasse/templates/address.yaml -p NAME=topic-ride-event -p ADDRESS=topic-ride-event -p NAMESPACE=$ENMASSE_PRJ -p ADDRESS_SPACE=brokered-default -p TYPE=topic -p PLAN=brokered-topic | oc apply -n $ENMASSE_PRJ -f -
 ----
 +
 * You can check that the creation of the address by looking at the contents of the configmap. If successful, the address controller adds `"status":{"isReady":true,"phase":"Active"}` to the JSON object in the configmap.
 +
-[source,text]
 ----
 $ oc get configmap topic-ride-event -o template --template={{.data}} -n $ENMASSE_PRJ
 ----
@@ -598,7 +577,6 @@ map[config.json:{"apiVersion":"enmasse.io/v1","kind":"Address","metadata":{"name
 . Another way to create addresses is through the EnMasse web console.
 * Get the URL of the console:
 +
-[source,text]
 ----
 $ echo "https://$(oc get route console -o template --template {{.spec.host}} -n $ENMASSE_PRJ)"
 ----
@@ -633,7 +611,6 @@ If you have Ansible installed, you can run the Ansible playbook provided in the 
 . In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
 . Run the EnMasse playbook. Provide the name of the project where to install EnMasse as a parameter to the playbook. Remember, the project name should be unique within the cluster.
 +
-[source,text]
 ----
 $ ENMASSE_PRJ=enmasse-<unique suffix>
 $ cd ansible
@@ -705,14 +682,12 @@ Ansible playbooks.
 . In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
 . Create a project on OpenShift. The project will be used for the different tools we need to install. The project name has to be unique within the OpenShift cluster, so use `tools-` suffixed with your name or another unique identifier.
 +
-[source,text]
 ----
 $ export TOOLS_PRJ=tools-<unique suffix>
 $ oc new-project $ENMASSE_PRJ
 ----
 . Obtain the name of your Openshift domain.
 +
-[source,text]
 ----
 $ oc create route edge testroute --service=testsvc --port=80 -n $TOOLS_PRJ
 $ DOMAIN=$(oc get route testroute -o jsonpath='{.spec.host}' -n $TOOLS_PRJ | sed "s/testroute-${TOOLS_PRJ}.//g")
@@ -720,7 +695,6 @@ $ oc delete route testroute -n $TOOLS_PRJ
 ----
 . Deploy Gogs using the template in the `openshift/gogs` folder:
 +
-[source,text]
 ----
 $ oc process -f openshift/gogs/gogs-persistent-template.yaml --param=APPLICATION_NAME=gogs--param=HOSTNAME=gogs-$TOOLS_PRJ.$DOMAIN --param=GOGS_VERSION=0.11.34 --param=DATABASE_USER=gogs --param=DATABASE_PASSWORD=gogs --param=DATABASE_NAME=gogs --param=SKIP_TLS_VERIFY=true | oc create -f - -n $TOOLS_PRJ
 ----
@@ -728,13 +702,11 @@ $ oc process -f openshift/gogs/gogs-persistent-template.yaml --param=APPLICATION
 . Wait until the PostgreSQL pod is up and running.
 . Resume the `gogs` deployment:
 +
-[source,text]
 ----
 $ oc rollout resume dc/gogs -n $TOOLS_PRJ
 ----
 . Get the URL for the `gogs` route:
 +
-[source,text]
 ----
 $ echo "http://$(oc get route gogs -o jsonpath='{.spec.host}' -n $TOOLS_PRJ)"
 ----
@@ -767,7 +739,6 @@ If you have Ansible installed, you can run the Ansible playbook provided in the 
 . In a terminal, change directory to the folder where you cloned the `installation` project of the lab material. Change directory to the `ansible` folder.
 . Run the Gogs playbook. Provide the name of the project where to install Gogs and the other tools as a parameter to the playbook. Remember, the project name should be unique within the cluster.
 +
-[source,text]
 ----
 $ TOOLS_PRJ=tools-<unique suffix>
 $ cd ansible
@@ -785,13 +756,11 @@ We use an image from https://www.crunchydata.com[CrunchyData], a US based compan
 . In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
 . Create a secret for the pgAdmin4 username and password
 +
-[source,text]
 ----
 $ oc create secret generic pgadmin4-credentials --from-literal=pgadmin4.username=admin@example.com --from-literal=pgadmin4.password=admin123 -n $TOOLS_PRJ
 ----
 . Deploy a service, route and deployment for pgAdmin:
 +
-[source,text]
 ----
 $ oc apply -f openshift/pgadmin4/deployment.yaml -n $TOOLS_PRJ
 ----
@@ -812,7 +781,6 @@ If you have Ansible installed, you can run the Ansible playbook provided in the 
 . In a terminal, change directory to the folder where you cloned the `installation` project of the lab material. Change directory to the `ansible` folder.
 . Run the pgAdmin4 playbook.
 +
-[source,text]
 ----
 $ cd ansible
 $ ansible-playbook playbooks/pgadmin4.yml -e project_tools=$TOOLS_PRJ
@@ -835,19 +803,16 @@ Slave build pods can be configured as part of the build pipeline script, or with
 * The `image` element indicates which image to use for the slave pod. In this case we use the image of the regular Maven build pod.
 . Create the configmap:
 +
-[source,text]
 ----
 $ oc create -f openshift/jenkins/jenkins-maven-slave-configmap.yaml -n $TOOLS_PRJ
 ----
 . Create the persistent volume claim for the slave build pod:
 +
-[source,text]
 ----
 $ oc create -f openshift/jenkins/jenkins-maven-slave-pvc.yaml -n $TOOLS_PRJ
 ----
 . Deploy Jenkins. The template used is identical to the one used by the `Jenkins` entry in the Openshift Catalog.
 +
-[source,text]
 ----
 $ oc process -f openshift/jenkins/jenkins-persistent.yaml -p MEMORY_LIMIT=1Gi | oc create -f - -n $TOOLS_PRJ
 ----
@@ -882,7 +847,6 @@ If you have Ansible installed, you can run the Ansible playbook provided in the 
 . In a terminal, change directory to the folder where you cloned the `installation` project of the lab material. Change directory to the `ansible` folder.
 . Run the Jenkins playbook.
 +
-[source,text]
 ----
 $ cd ansible
 $ ansible-playbook playbooks/jenkins.yml -e project_tools=$TOOLS_PRJ
@@ -918,7 +882,6 @@ image::images/openshift_build_pipeline.png[]
 
 The code of the pipeline:
 
-[source,groovy]
 ----
           def git_url = "${GIT_URL}"
           def git_repo_app = "${GIT_REPO}"
@@ -1004,7 +967,6 @@ image::images/gogs_repository_link.png[]
 * In a terminal window on your workstation, change directory to the directory where you cloned the driver service source code from GitHub.
 * Add a new remote repository called `gogs` pointing to the repository on Gogs. Add the credentials for the developer user to the url of the remote. Push the source code.
 +
-[source,text]
 ----
 $ git remote add gogs http://developer:developer123@<url of the driver service repository on gogs>
 $ git checkout master
@@ -1017,14 +979,12 @@ $ git push -u gogs master
 . Make sure you are logged with the `oc` client into your OpenShift environment.
 . Create a project on OpenShift to deploy the services. The project name has to be unique within the OpenShift cluster, so use `services-` suffixed with your name or another unique identifier.
 +
-[source,text]
 ----
 $ export $SERVICES_PRJ=services-<unique suffix>
 $ oc new-project $SERVICES_PRJ
 ----
 . Give the default service account in the project cluster view privileges. This is required because the services use the Kubernetes API to load their configuration configmap.
 +
-[source,text]
 ----
 $ oc adm policy add-role-to-user view system:serviceaccount:$SERVICES_PRJ:default -n $SERVICES_PRJ
 ----
@@ -1032,7 +992,6 @@ $ oc adm policy add-role-to-user view system:serviceaccount:$SERVICES_PRJ:defaul
 * In a terminal window, change directory to the folder where you cloned the `driver-service` project of the lab material. Change directory to the `etc` folder inside the project.
 * Open the `application-config.yaml` file in a text editor and review its content.
 +
-[source,yaml]
 ----
 amqp.host:
 amqp.port: 5671
@@ -1071,27 +1030,23 @@ The hostname is `messaging.<enmasse project>.svc.cluster.local`, where `<enmasse
 Save the file.
 * Create a configmap from the `application-config.yaml` file:
 +
-[source,text]
 ----
 $ oc create configmap driver-service --from-file=application-config.yaml -n $SERVICES_PRJ
 ----
 . Create a truststore holding the EnMasse messaging certificate.
 * Extract the EnMasse messaging certificate from the `external-certs-messaging` secret in the EnMasse project"
 +
-[source,text]
 ----
 $ oc get secret external-certs-messaging -o jsonpath='{.data.tls\.crt}' -n $ENMASSE_PRJ | base64 -d > messaging-cert.pem
 ----
 +
 Verify the contents of the `messaging-cert.pem` file.
 +
-[source,text]
 ----
 $ cat messaging.pem
 ----
 +
 .Sample output
-[source,text]
 ----
 -----BEGIN CERTIFICATE-----
 MIIDYTCCAkmgAwIBAgIJALwxhMIr5Z/NMA0GCSqGSIb3DQEBCwUAMEcxEzARBgNV
@@ -1120,13 +1075,11 @@ BXi+Rfk=
 image::images/enmasse_download_certificate.png[]
 * Create a JKS truststore containing the EnMasse certificate with the `keytool` tool. The truststore password is `password`.
 +
-[source,text]
 ----
 $ keytool -importcert -trustcacerts -file messaging-cert.pem -keystore enmasse.jks -storepass password -noprompt
 ----
 . Create a secret with the truststore.
 +
-[source,text]
 ----
 $ oc create secret generic enmasse-truststore --from-file=enmasse.jks -n $SERVICES_PRJ
 ----
@@ -1139,7 +1092,6 @@ $ oc create secret generic enmasse-truststore --from-file=enmasse.jks -n $SERVIC
 * *driver-service-pipeline.yml*: the build pipeline for the driver service. The Jenkins file is embedded in the pipeline.
 . Deploy the templates to OpenShift. Note that the buildconfig and the build pipeline are created in the OpenShift project were Jenkins is deployed.
 +
-[source,text]
 ----
 $ oc process -f openshift/driver-service/driver-service-template.yaml -p APPLICATION_NAME=driver-service -p APPLICATION_CONFIGMAP=driver-service -p APPLICATION_TRUSTSTORE=enmasse-truststore | oc create -f - -n $SERVICES_PRJ
 $ oc process -f openshift/driver-service/driver-service-binary.yaml -p APPLICATION_NAME=driver-service -p IMAGE_STREAM=redhat-openjdk18-openshift:1.4 | oc create -f - -n $TOOLS_PRJ
@@ -1147,13 +1099,11 @@ $ oc process -f openshift/driver-service/driver-service-pipeline.yaml -p BC_NAME
 ----
 . Give the Jenkins service account project admin rights in the services project:
 +
-[source,text]
 ----
 $ oc adm policy add-role-to-user edit system:serviceaccount:$TOOLS_PRJ:jenkins -n $SERVICES_PRJ
 ----
 . Start the pipeline for the driver service:
 +
-[source,text]
 ----
 $ oc start-build driver-service-pipeline -n $TOOLS_PRJ
 ----
@@ -1168,7 +1118,6 @@ image::images/openshift_service_deployed.png[]
 . In the OpenShift console, navigate to the driver service pod, and check the logs of the pod. Alternatively you can use `oc logs -f <name of the pod>`. +
 Expect to see something like:
 +
-[source,text]
 ----
 Starting the Java application using /opt/run-java/run-java.sh ...
 exec java -Dapplication.configmap=driver-service -Dvertx.logger-delegate-factory-class-name=io.vertx.core.logging.SLF4JLogDelegateFactory -Xms63m -Xmx250m -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -XX:+UseParallelOldGC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20 -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -XX:MaxMetaspaceSize=100m -XX:ParallelGCThreads=1 -Djava.util.concurrent.ForkJoinPool.common.parallelism=1 -XX:CICompilerCount=2 -XX:+ExitOnOutOfMemoryError -cp . -jar /deployments/driver-service-simulator-1.0-SNAPSHOT.jar
@@ -1186,7 +1135,6 @@ The procedure is equivalent to the driver service.
 * In a terminal window, change directory to the folder where you cloned the `passenger-service` project of the lab material. Change directory to the `etc` folder inside the project.
 * Open the `application.properties` file in a text editor and review its content.
 +
-[source,yaml]
 ----
 amqp.host=
 amqp.port=5671
@@ -1224,7 +1172,6 @@ logging.level.com.acme.ride=DEBUG
 Save the file.
 * Create a configmap from the `application.properties` file:
 +
-[source,text]
 ----
 $ oc create configmap passenger-service --from-file=application.properties -n $SERVICES_PRJ
 ----
@@ -1239,7 +1186,6 @@ $ oc create configmap passenger-service --from-file=application.properties -n $S
 * *passenger-service-pipeline.yml*: the build pipeline for the passenger service. The Jenkins file is embedded in the pipeline.
 . Deploy the templates to OpenShift. Note that the buildconfig and the build pipeline are created in the OpenShift project were Jenkins is deployed.
 +
-[source,text]
 ----
 $ oc process -f openshift/passenger-service/passenger-service-template.yaml -p APPLICATION_NAME=passenger-service -p APPLICATION_CONFIGMAP=passenger-service -p APPLICATION_TRUSTSTORE=enmasse-truststore | oc create -f - -n $SERVICES_PRJ
 $ oc process -f openshift/passenger-service/passenger-service-binary.yaml -p APPLICATION_NAME=passenger-service -p IMAGE_STREAM=redhat-openjdk18-openshift:1.4 | oc create -f - -n $TOOLS_PRJ
@@ -1247,7 +1193,6 @@ $ oc process -f openshift/passenger-service/passenger-service-pipeline.yaml -p B
 ----
 . Start the pipeline for the passenger service:
 +
-[source,text]
 ----
 $ oc start-build passenger-service-pipeline -n $TOOLS_PRJ
 ----
@@ -1259,7 +1204,6 @@ image::images/openshift_service_deployed_1.png[]
 . In the OpenShift console, navigate to the passenger service pod, and check the logs of the pod. Alternatively you can use `oc logs -f <name of the pod>`. +
 The last lines of the log look like:
 +
-[source,text]
 ----
 2018-08-26 13:16:17.341  INFO 1 --- [           main] o.s.j.e.a.AnnotationMBeanExporter        : Located managed bean 'restartEndpoint': registering with JMX server as MBean [org.springframework.cloud.context.restart:name=restartEndpoint,type=RestartEndpoint]
 2018-08-26 13:16:17.346  INFO 1 --- [           main] o.s.j.e.a.AnnotationMBeanExporter        : Located managed bean 'refreshScope': registering with JMX server as MBean [org.springframework.cloud.context.scope.refresh:name=refreshScope,type=RefreshScope]
@@ -1286,14 +1230,12 @@ The main difference between the dispatch service and the other services is the u
 ** ride-schema.sql: sql ddl script for the `Ride` entity.
 * Create a configmap with the scripts:
 +
-[source.text]
 ----
 $ oc create configmap dispatch-service-postgresql-init --from-file=openshift/dispatch-service-postgresql/postgresql -n $SERVICES_PRJ
 ----
 . Review the `openshift/dispatch-service-postgresql/postgresql-persistent-template.yaml` template. Notice the use of the init-container in the `spec.strategy.recreateParams.execNewPod` section of the deployment config.
 . Deploy PostgreSQL using the template:
 +
-[source,text]
 ----
 $ oc new-app -f openshift/dispatch-service-postgresql/postgresql-persistent-template.yaml  -param=APPLICATION_NAME=dispatch-service --param=DATABASE_SERVICE_NAME=dispatch-service-postgresql --param=POSTGRESQL_USER=jboss --param=POSTGRESQL_PASSWORD=jboss --param=POSTGRESQL_DATABASE=rhpam --param=POSTGRESQL_MAX_CONNECTIONS=100 --param=POSTGRESQL_MAX_PREPARED_TRANSACTIONS=100 -n $SERVICES_PRJ
 ----
@@ -1319,7 +1261,6 @@ image::images/pgadmin4_browser_2.png[]
 * In a terminal window, change directory to the folder where you cloned the `dispatch-service` project of the lab material. Change directory to the `etc` folder inside the project.
 * Open the `application.properties` file in a text editor and review its content.
 +
-[source,yaml]
 ----
 postgresql.host=
 amqp.host=
@@ -1372,7 +1313,6 @@ As the PostgreSQL database is deployed in the same OpenShift project as the appl
 * Save the file.
 * Create a configmap from the `application.properties` and the `jbpm-quartz.properties` file:
 +
-[source,text]
 ----
 $ oc create configmap dispatch-service --from-file=application.properties --from-file=jbpm-quartz.properties -n $SERVICES_PRJ
 ----
@@ -1387,7 +1327,6 @@ $ oc create configmap dispatch-service --from-file=application.properties --from
 * *dispatch-service-pipeline.yml*: the build pipeline for the dispatch service. The Jenkins file is embedded in the pipeline.
 . Deploy the templates to OpenShift. Note that the buildconfig and the build pipeline are created in the OpenShift project were Jenkins is deployed.
 +
-[source,text]
 ----
 $ oc process -f openshift/dispatch-service/dispatch-service-template.yaml -p APPLICATION_NAME=dispatch-service -p APPLICATION_CONFIGMAP=dispatch-service -p APPLICATION_TRUSTSTORE=enmasse-truststore | oc create -f - -n $SERVICES_PRJ
 $ oc process -f openshift/dispatch-service/dispatch-service-binary.yaml -p APPLICATION_NAME=dispatch-service -p IMAGE_STREAM=redhat-openjdk18-openshift:1.4 | oc create -f - -n $TOOLS_PRJ
@@ -1395,7 +1334,6 @@ $ oc process -f openshift/dispatch-service/dispatch-service-pipeline.yaml -p BC_
 ----
 . Start the pipeline for the dispatch service:
 +
-[source,text]
 ----
 $ oc start-build dispatch-service-pipeline -n $TOOLS_PRJ
 ----
@@ -1407,7 +1345,6 @@ image::images/openshift_service_deployed_2.png[]
 . In the OpenShift console, navigate to the dispatch service pod, and check the logs of the pod. Alternatively you can use `oc logs -f <name of the pod>`. +
 The last lines of the log look like:
 +
-[source,text]
 ----
 2018-08-27 07:25:25.749  INFO 1 --- [           main] o.s.c.support.DefaultLifecycleProcessor  : Starting beans in phase 0
 2018-08-27 07:25:25.847  INFO 1 --- [           main] o.s.c.support.DefaultLifecycleProcessor  : Starting beans in phase 2147483647
@@ -1433,7 +1370,6 @@ If you have Ansible installed, you can run the Ansible playbooks provided in the
 . In a terminal, change directory to the folder where you cloned the `installation` project of the lab material. Change directory to the `ansible` folder.
 . Run the service playbooks.
 +
-[source,text]
 ----
 $ cd ansible
 $ ansible-playbook playbooks/driver_service.yml -e project_enmasse=$ENMASSE_PRJ -e project_tools=$TOOLS_PRJ -e project_services=$SERVICES_PRJ
@@ -1443,7 +1379,6 @@ $ ansible-playbook playbooks/dispatch_service.yml -e project_enmasse=$ENMASSE_PR
 . Expect the playbook to run to completion without failures.
 . Start the pipeline for the different services:
 +
-[source,text]
 ----
 $ oc start-build driver-service-pipeline -n $TOOLS_PRJ
 $ oc start-build passenger-service-pipeline -n $TOOLS_PRJ
@@ -1458,21 +1393,18 @@ The passenger service exposes a REST endpoint, which when called will send 1 or 
 
 . In a terminal window, execute the following command using curl:
 +
-[source,text]
 ----
 $ PASSENGER_SERVICE_URL=$(echo "http://$(oc get route passenger-service -o jsonpath='{.spec.host}' -n $SERVICES_PRJ)")
 $ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 1}' $PASSENGER_SERVICE_URL/simulate
 ----
 .Output
 +
-[source,text]
 ----
 Sent 1 message(s) with type 1
 ----
 * The type of the message determines the message flow. A type 1 message follows the 'happy path': ride requested -> driver assigned -> ride started -> ride ended -> payment handled.
 . Check the log of the dispatch service in the OpenShift console or using `oc logs`. Expect to see the following, after a couple of seconds:
 +
-[source,text]
 ----
 2018-08-27 10:40:08.863 DEBUG 1 --- [enerContainer-6] c.a.r.d.m.l.RideEventsMessageListener    : Processing 'RideRequestedEvent' message for ride 2ad3c3fe-9228-4060-a916-4c4b6655e004
 2018-08-27 10:40:09.522 DEBUG 1 --- [enerContainer-6] c.a.r.d.m.l.RideEventsMessageListener    : Started dispatch process for ride request 2ad3c3fe-9228-4060-a916-4c4b6655e004. ProcessInstanceId = 1
@@ -1482,7 +1414,6 @@ Sent 1 message(s) with type 1
 ----
 . Check the log of the driver service:
 +
-[source,text]
 ----
 2018-08-27 10:40:09.653 DEBUG   --- [ntloop-thread-2] MessageConsumer                          : Consumed 'AssignedDriverCommand' message for ride 2ad3c3fe-9228-4060-a916-4c4b6655e004
 2018-08-27 10:40:11.664 DEBUG   --- [ntloop-thread-3] MessageProducer                          : Sent 'DriverAssignedMessage' for ride 2ad3c3fe-9228-4060-a916-4c4b6655e004
@@ -1491,7 +1422,6 @@ Sent 1 message(s) with type 1
 ----
 . Check the log of the passenger service:
 +
-[source,text]
 ----
 2018-08-27 10:40:08.788  INFO 1 --- [nio-8080-exec-7] c.a.r.p.m.RideRequestedMessageSender     : Sent 'RideRequestedEvent' for ride 2ad3c3fe-9228-4060-a916-4c4b6655e004
 2018-08-27 10:40:11.839 DEBUG 1 --- [enerContainer-1] r.p.m.DriverAssignedEventMessageListener : Consumed 'DriverAssignedEvent' for ride 2ad3c3fe-9228-4060-a916-4c4b6655e004
@@ -1547,7 +1477,6 @@ This connection is from the passenger service. It shows 10 receivers because we 
 
 . Send a command to the REST API of the passenger service to send a `RideRequestedEvent` message of type 2.
 +
-[source,text]
 ----
 $ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 2}' $PASSENGER_SERVICE_URL/simulate
 ----
@@ -1558,7 +1487,6 @@ A type 2 message mimicks the scenario where the passenger cancels the ride: ride
 ** The `Ride` for this ride has status 4 (`PASSENGER_CANCELED`)
 ** The passenger service log shows that the passenger is canceling the ride:
 +
-[source,text]
 ----
 2018-08-27 16:42:24.831  INFO 1 --- [nio-8080-exec-5] c.a.r.p.m.RideRequestedMessageSender     : Sent 'RideRequestedEvent' for ride 7f016ed9-ba81-425f-a989-b35afdf9dace
 2018-08-27 16:42:27.175 DEBUG 1 --- [enerContainer-8] r.p.m.DriverAssignedEventMessageListener : Consumed 'DriverAssignedEvent' for ride 7f016ed9-ba81-425f-a989-b35afdf9dace
@@ -1566,7 +1494,6 @@ A type 2 message mimicks the scenario where the passenger cancels the ride: ride
 ----
 ** The dispatcher server logs shows that the service consumed a `PassengerCancelledEvent` message.
 +
-[source,text]
 ----
 2018-08-27 16:42:24.832 DEBUG 1 --- [enerContainer-7] c.a.r.d.m.l.RideEventsMessageListener    : Processing 'RideRequestedEvent' message for ride 7f016ed9-ba81-425f-a989-b35afdf9dace
 2018-08-27 16:42:24.859 DEBUG 1 --- [enerContainer-7] c.a.r.d.m.l.RideEventsMessageListener    : Started dispatch process for ride request 7f016ed9-ba81-425f-a989-b35afdf9dace. ProcessInstanceId = 2
@@ -1578,7 +1505,6 @@ Passenger cancelled
 
 . Finally, send a command to the REST API of the passenger service to send a `RideRequestedEvent` message of type 3.
 +
-[source,text]
 ----
 $ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 2}' $PASSENGER_SERVICE_URL/simulate
 ----
@@ -1595,7 +1521,6 @@ A type 3 message mimicks the scenario where no driver can be assigned to the rid
 
 . Now you can put some load on the system. This can be done by sending a command to the REST API of the passenger service to send multiple `RideRequestedEvent` messages. If you chose type 0, you will have a mix of the different types, with approximately 6% messages of type 2 and 6% of type 3.
 +
-[source,text]
 ----
 $ curl -X POST -H "Content-type: application/json" -d '{"messages": 100, "type": 0}' $PASSENGER_SERVICE_URL/simulate
 ----
@@ -1607,32 +1532,27 @@ image::images/pgadmin4_count_ride_status_2.png[]
 . The dispatch service and the passenger service use shared, durable topic subscriptions. This means they can be scaled up and down without issues.
 * Scale down the dispatch server to 0 pods
 +
-[source,text]
 ----
 $ oc scale dc dispatch-service --replicas=0 -n $SERVICES_PRJ
 ----
 * Call the passenger service REST API:
 +
-[source,text]
 ----
 $ curl -X POST -H "Content-type: application/json" -d '{"messages": 10, "type": 0}' $PASSENGER_SERVICE_URL/simulate
 ----
 * Scale up the dispatch service.
 +
-[source,text]
 ----
 $ oc scale dc dispatch-service --replicas=1 -n $SERVICES_PRJ
 ----
 * Follow the logs of the dispatch service. Note that after starting up the dispatch service starts to consume the messages sent to the `topic-ride-event` topic while the service was down.
 * Scale up the dispatch service to 2 pods
 +
-[source,text]
 ----
 $ oc scale dc dispatch-service --replicas=2 -n $SERVICES_PRJ
 ----
 * Call the passenger service REST API:
 +
-[source,text]
 ----
 $ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 1}' $PASSENGER_SERVICE_URL/simulate
 ----
@@ -1670,7 +1590,6 @@ Amongst these libraries are `opentracing-jms-2` and `opentracing-jms-spring`. Th
 * The `opentracing-jms-spring` library is compatible with JMS 1.1, but the Dispatch and Passenger services use JMS 2.0. This means you have to provide and configure a JMS 2.0 compatible version of the `TracingJmsTemplate` class. See `com.acme.ride.passenger.tracing.TracingJmsConfiguration` and `com.acme.ride.passenger.tracing.TracingJmsTemplate` for details.
 * In the Passenger service, an initial span is created for every `RideRequestedEvent` message sent. This span acts as parent span for all subsequent message exchanges and allows to follow the message flow throughout the system.
 +
-[source,java]
 ----
     Scope scope = tracer.buildSpan("RideRequested").ignoreActiveSpan()
         .withTag(Tags.SPAN_KIND.getKey(), "RideRequest")
@@ -1686,12 +1605,10 @@ This means that the application code needs to be instrumented to provide tracing
 * The Jaeger tracer is initialized in `MainVerticle`.
 * When the `MessageConsumerVerticle` receives a `AssignDriverCommand` message, the span information is extracted from the incoming AMQP message and a new span is created with the extracted span as parent span.
 +
-[source,java]
 ----
 Scope scope = TracingUtils.buildFollowingSpan(msgBody, tracer);
 ----
 +
-[source,java]
 ----
     public static Scope buildFollowingSpan(JsonObject message, Tracer tracer) {
 
@@ -1726,12 +1643,10 @@ Scope scope = TracingUtils.buildFollowingSpan(msgBody, tracer);
 ----
 * The current span is stored as a `ThreadLocal` variable. However, every verticle is executed in its own thread, which means that the current span context is lost when a message is sent over the Vert.x event bus to another verticle. This is solved by serializing the active span and attaching it as a header to the event bus message.
 +
-[source,java]
 ----
 vertx.eventBus().<JsonObject>send("message-producer", message, TracingUtils.injectSpan(new DeliveryOptions(), tracer));
 ----
 +
-[source,java]
 ----
     public static DeliveryOptions injectSpan(DeliveryOptions options, Tracer tracer) {
         Span span = tracer.activeSpan();
@@ -1743,7 +1658,6 @@ vertx.eventBus().<JsonObject>send("message-producer", message, TracingUtils.inje
 ----
 * In the `MessageProducerVerticle` the active span is extracted from the event bus message headers. A new span is created as a child span and added to the application properties section of the AMQP message.
 +
-[java,source]
 ----
     Span span = TracingUtils.buildAndInjectSpan(amqpMsg, tracer, msg);
     try {
@@ -1782,7 +1696,6 @@ Jaeger is installed in the tools project.
 * The template defines a route for the Jaeger UI
 . Deploy Jaeger to the tools project
 +
-[source,text]
 ----
 $ oc process -f openshift/jaeger/jaeger-all-in-one.yaml | oc create -f - -n $TOOLS_PRJ
 ----
@@ -1800,7 +1713,6 @@ image::images/jaeger_landing_page.png[]
 . In a terminal window on your workstation, change directory to the directory where you cloned the driver service source code from GitHub. +
 Checkout the `tracing` branch, and push the branch to the gogs repository.
 +
-[source,text]
 ----
 $ git checkout tracing
 $ git push -u gogs tracing
@@ -1809,7 +1721,6 @@ $ git push -u gogs tracing
 * Change directory to the `etc` folder in the driver service source code project.
 * Open the `application-config.yaml` file. Note the additional configuration at the bottom of the file:
 +
-[source,text]
 ----
 service-name: driver-service
 reporter-log-spans: false
@@ -1833,7 +1744,6 @@ agent-port: 6831
 * Set the `amqp.host` property to the hostname of the EnMasse messaging service. Save the file.
 * Delete the current configmap and create a new one from the `application-config.yaml` file.
 +
-[source,text]
 ----
 $ oc delete configmap driver-service -n $SERVICES_PRJ
 $ oc create configmap driver-service --from-file=application-config.yaml -n $SERVICES_PRJ
@@ -1851,7 +1761,6 @@ image::images/openshift_build_pipeline_edit.png[]
 Notice the second (side-car) container definition, named `jaeger-agent` and using the `jaegertracing/jaeger-agent` image. The agent is set up to transmit tracing samples to the jaeger-collector service on port 14267.
 * Replace the deploymentconfig
 +
-[source,text]
 ----
 $ oc delete dc driver-service -n $SERVICES_PRJ
 $ oc process -f openshift/driver-service/driver-service-tracing-template.yaml -p APPLICATION_NAME=driver-service -p APPLICATION_CONFIGMAP=driver-service -p APPLICATION_TRUSTSTORE=enmasse-truststore -p JAEGER_COLLECTOR_NAMESPACE=$TOOLS_PRJ | oc create -f - -n $SERVICES_PRJ
@@ -1861,7 +1770,6 @@ $ oc process -f openshift/driver-service/driver-service-tracing-template.yaml -p
 image::images/openshift_pod_sidecar_container.png[]
 . Check the logs of the driver service container. Expect to see something like:
 +
-[source,text]
 ----
 Starting the Java application using /opt/run-java/run-java.sh ...
 exec java -Dapplication.configmap=driver-service -Dvertx.logger-delegate-factory-class-name=io.vertx.core.logging.SLF4JLogDelegateFactory -Xms63m -Xmx250m -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -XX:+UseParallelOldGC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20 -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -XX:MaxMetaspaceSize=100m -XX:ParallelGCThreads=1 -Djava.util.concurrent.ForkJoinPool.common.parallelism=1 -XX:CICompilerCount=2 -XX:+ExitOnOutOfMemoryError -cp . -jar /deployments/driver-service-1.0-SNAPSHOT.jar
@@ -1873,7 +1781,6 @@ exec java -Dapplication.configmap=driver-service -Dvertx.logger-delegate-factory
 ----
 . Check the logs of the jaeger-agent container. Expect to see something like:
 +
-[source,text]
 ----
 {"level":"info","ts":1535444714.1444583,"caller":"tchannel/builder.go:94","msg":"Enabling service discovery","service":"jaeger-collector"}
 {"level":"info","ts":1535444714.1449552,"caller":"peerlistmgr/peer_list_mgr.go:111","msg":"Registering active peer","peer":"jaeger-collector.tools-bt.svc:14267"}
@@ -1890,7 +1797,6 @@ The steps to follow are essentially the same as for the driver service.
 . In a terminal window on your workstation, change directory to the directory where you cloned the passenger service source code from GitHub. +
 Checkout the `tracing` branch, and push the branch to the gogs repository.
 +
-[source,text]
 ----
 $ git checkout tracing
 $ git push -u gogs tracing
@@ -1899,7 +1805,6 @@ $ git push -u gogs tracing
 * Change directory to the `etc` folder in the passenger service source code project.
 * Open the `application.properties` file. Note the additional configuration at the bottom of the file:
 +
-[source,text]
 ----
 jaeger.service-name=passenger-service
 jaeger.sampler-type=ratelimiting
@@ -1916,7 +1821,6 @@ Refer to the previous paragraph for details about these settings.
 * Set the value of the `amqp.host` property to the hostname of the EnMasse messaging service. Save the file.
 * Delete the current configmap and create a new one from the `application.properties` file.
 +
-[source,text]
 ----
 $ oc delete configmap passenger-service -n $SERVICES_PRJ
 $ oc create configmap passenger-service --from-file=application.properties -n $SERVICES_PRJ
@@ -1927,7 +1831,6 @@ $ oc create configmap passenger-service --from-file=application.properties -n $S
 * In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
 * Replace the deploymentconfig:
 +
-[source,text]
 ----
 $ oc delete dc passenger-service -n $SERVICES_PRJ
 $ oc process -f openshift/passenger-service/passenger-service-tracing-template.yaml -p APPLICATION_NAME=passenger-service -p APPLICATION_CONFIGMAP=passenger-service -p APPLICATION_TRUSTSTORE=enmasse-truststore -p JAEGER_COLLECTOR_NAMESPACE=$TOOLS_PRJ | oc create -f - -n $SERVICES_PRJ
@@ -1935,7 +1838,6 @@ $ oc process -f openshift/passenger-service/passenger-service-tracing-template.y
 . A new deployment of the passenger service starts. Note that the pod consists of two containers.
 . Check the logs of the passenger service container. Scroll through the logs until you find the log entry for the configuration of the Jaeger tracer:
 +
-[source,text]
 ----
 2018-08-28 07:54:34.446  INFO 1 --- [           main] io.jaegertracing.Configuration           : I
 nitialized tracer=Tracer(version=Java-0.27.0, serviceName=passenger-service, reporter=CompositeRep
@@ -1953,7 +1855,6 @@ ce-4-rm897, jaeger.version=Java-0.27.0, ip=10.128.1.252}, zipkinSharedRpcSpan=fa
 . In a terminal window on your workstation, change directory to the directory where you cloned the dispatch service source code from GitHub. +
 Checkout the `tracing` branch, and push the branch to the gogs repository.
 +
-[source,text]
 ----
 $ git checkout tracing
 $ git push -u gogs tracing
@@ -1964,7 +1865,6 @@ $ git push -u gogs tracing
 * Set the value of the `amqp.host` property to the hostname of the EnMasse messaging service to the `amqp.host` property. Set the `postgresql.host` property to the host name of the PostgreSQL service. Save the file.
 * Delete the current configmap and create a new one from the `application.properties` file.
 +
-[source,text]
 ----
 $ oc delete configmap dispatch-service -n $SERVICES_PRJ
 $ oc create configmap dispatch-service --from-file=application.properties -n $SERVICES_PRJ
@@ -1975,7 +1875,6 @@ $ oc create configmap dispatch-service --from-file=application.properties -n $SE
 * In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
 * Replace the deploymentconfig:
 +
-[source,text]
 ----
 $ oc delete dc dispatch-service -n $SERVICES_PRJ
 $ oc process -f openshift/dispatch-service/dispatch-service-tracing-template.yaml -p APPLICATION_NAME=dispatch-service -p APPLICATION_CONFIGMAP=dispatch-service -p APPLICATION_TRUSTSTORE=enmasse-truststore -p JAEGER_COLLECTOR_NAMESPACE=$TOOLS_PRJ | oc create -f - -n $SERVICES_PRJ
@@ -1983,7 +1882,6 @@ $ oc process -f openshift/dispatch-service/dispatch-service-tracing-template.yam
 . A new deployment of the dispatch service starts. Note that the pod consists of two containers.
 . Check the logs of the dispatch service container. Scroll through the logs until you find the log entry for the configuration of the Jaeger tracer:
 +
-[source,text]
 ----
 2018-08-28 09:19:41.350 INFO 1 --- [ main] io.jaegertracing.Configuration : Initialized tracer=Tracer(version=Java-0.27.0, serviceName=dispatch-service, reporter=CompositeReporter(reporters=[RemoteReporter(queueProcessor=RemoteReporter.QueueProcessor(open=true), sender=UdpSender(udpTransport=ThriftUdpTransport(socket=java.net.DatagramSocket@45e6d1e0, receiveBuf=null, receiveOffSet=-1, receiveLength=0)), closeEnqueueTimeout=1000), LoggingReporter(logger=Logger[io.jaegertracing.reporters.LoggingReporter])]), sampler=RateLimitingSampler(maxTracesPerSecond=1.0, tags={sampler.type=ratelimiting, sampler.param=1.0}), ipv4=176160774, tags={hostname=dispatch-service-1-jzr4s, jaeger.version=Java-0.27.0, ip=10.128.0.6}, zipkinSharedRpcSpan=false, baggageSetter=io.jaegertracing.baggage.BaggageSetter@61db86bf, expandExceptionLogs=false)
 ----
@@ -1992,7 +1890,6 @@ $ oc process -f openshift/dispatch-service/dispatch-service-tracing-template.yam
 
 . In a terminal window, use curl to call the REST endpoint of the passenger service:
 +
-[source,text]
 ----
 $ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 1}' $PASSENGER_SERVICE_URL/simulate
 ----
@@ -2013,7 +1910,6 @@ image::images/jaeger_trace_details_1.png[]
 * Note the msgTraceId which was specifically added as a tag to the span in the implementation.
 . In a terminal window, use curl to call the REST endpoint of the passenger service to send a request that will be cancelled by the passenger:
 +
-[source,text]
 ----
 $ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 2}' $PASSENGER_SERVICE_URL/simulate
 ----
@@ -2022,7 +1918,6 @@ $ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 2
 image::images/jaeger_trace_details_2.png[]
 . In a terminal window, use curl to call the REST endpoint of the passenger service to send a request that will remain unassigned:
 +
-[source,text]
 ----
 $ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 3}' $PASSENGER_SERVICE_URL/simulate
 ----
