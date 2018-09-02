@@ -1926,3 +1926,502 @@ $ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 3
 image::images/jaeger_trace_3.png[]
 +
 image::images/jaeger_trace_details_3.png[]
+
+== Monitoring
+
+Application performance monitoring is essential to be able to assert that your applications work and perform as expected and deliver the expected business value.
+
+There are numerous tools and products on the market that provide monitoring capabilities at infrastructure and application level, both open-source and proprietary.
+
+https://prometheus.io[Prometheus] is rapidly gaining traction as the open-source monitoring tool for cloud-native applications. Prometheus will be integrated into OpenShift to provide cluster-wide monitoring capabilities at the infrastructure level, but it is equally well suited for application-level monitoring.
+
+The central component of Prometheus is the Prometheus server. The Prometheus server scrapes targets at a configurable interval to collect metrics from specific targets and store them in a time-series database. Targets—​the systems or applications that need to be monitored—​ typically expose an HTTP endpoint providing metrics. Prometheus has a wide range of service discovery options to find the target services and start retrieving metrics from them, including integration with OpenShift/Kubernetes.
+
+The data gathered and stored by the Prometheus server can be queried using the PromQL language. The Prometheus UI has some limited capacities to show graphs from the collected metrics. Prometheus is often used together with https://grafana.com[Grafana] to provide dashboards on top of the metrics collected by Prometheus.
+
+This diagram illustrates the architecture of Prometheus and some of its ecosystem components:
+
+image::images/prometheus-architecture.svg[]
+
+In this section of the lab you deploy Prometheus in your OpenShift environment, and configure it to scrape metrics from the EnMasse broker and the dispatch service.
+
+=== Deploy Prometheus
+
+. In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
+. Create a service account for Prometheus in the tools project
++
+----
+$ oc create sa prometheus -n $TOOLS_PRJ
+----
+. The Prometheus service account requires view access rights to be able to use the Kubernetes/OpenShift API.
++
+----
+$ oc adm policy add-role-to-user view system:serviceaccount:$TOOLS_PRJ:prometheus -n $TOOLS_PRJ
+----
+. In order to discover services to monitor, the Prometheus service account also requires view access rights for the namespaces where the applications to be monitored are deployed.
++
+----
+$ oc adm policy add-role-to-user view system:serviceaccount:$TOOLS_PRJ:prometheus -n $ENMASSE_PRJ
+$ oc adm policy add-role-to-user view system:serviceaccount:$TOOLS_PRJ:prometheus -n $SERVICES_PRJ
+----
+. Create a configmap with the Prometheus configuration file.
++
+----
+$ oc create configmap prometheus --from-file=openshift/prometheus/prometheus.yaml -n $TOOLS_PRJ
+----
++
+The configuration file is minimal at the moment. Scraping jobs will be added later on.
++
+----
+rule_files:
+  - '*.rules'
+
+# global config
+global:
+  scrape_interval:     30s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 30s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+
+scrape_configs:
+----
+. Review the template for depoyment of Prometheus at `openshift/prometheus/prometheus-template.yaml`.
+* The template defines a route, a service and a deployment API object. The route allows access to the Prometheus UI web application.
+* By default, the Prometheus UI web application is exposed over port 9090.
+* The Prometheus image runs under the prometheus service account.
+* The Prometheus metric data are stored on temporary storage on the pod’s node.
+* The data retention time is set to 6 hours.
+* The prometheus configmap is mounted inside the Prometheus pod in the etc/prometheus directory.
+. Deploy Prometheus.
++
+----
+$ oc apply -f openshift/prometheus/prometheus-template.yaml -n $TOOLS_PRJ
+----
+. Get the URL for the `prometheus` route:
++
+----
+$ echo "http://$(oc get route prometheus -o jsonpath='{.spec.host}' -n $TOOLS_PRJ)"
+----
+. In a browser window, navigate to the URL of the `prometheus` route. Expect to see the Prometheus UI landing page:
++
+image::images/prometheus_landing_page.png[]
+
+=== Monitor the EnMasse broker
+
+. The EnMasse broker exposes Prometheus metrics at port 8080.
++
+image::images/enmasse_prometheus_port.png[]
++
+In the OpenShift console, navigate to the EnMasse broker pod, click on the `Terminal` tab and type `curl localhost:8080`. Expect to see the metrics exposed by the EnMasse broker in Prometheus format:
++
+image::images/enmasse_prometheus_metrics.png[]
+. Define a scrape job on Prometheus to scrape the EnMasse broker metrics. +
+Open the `openshift/prometheus/prometheus.yaml` file in the `installation` project of the lab material in a text editor. Add the following contents to the file. Replace `<enmasse project>` with the name of OpenShift project where you deployed EnMasse.
++
+----
+scrape_configs:
+- job_name: 'enmasse'
+  kubernetes_sd_configs:
+  - role: pod
+    namespaces:
+      names:
+      - <enmasse project>
+
+  relabel_configs:
+  - source_labels: [__meta_kubernetes_pod_container_port_name]
+    action: keep
+    regex: artemismetrics.*
+  - source_labels: [__meta_kubernetes_pod_name]
+    action: replace
+    target_label: kubernetes_pod_name
+  - source_labels: [__meta_kubernetes_namespace]
+    action: replace
+    target_label: kubernetes_namespace
+----
+* For a detailed overview of the Prometheus configuration settings, refer to the https://prometheus.io/docs/prometheus/latest/configuration/configuration/[Prometheus configuration documentation]
+* `scrape_configs` contains the configuration settings for the scraping jobs.
+* There is one scraping job named `enmasse` with type `kubernetes_sd_configs`.
+* Kubernetes SD configurations allow retrieving scrape targets from the Kubernetes REST API and always staying synchronized with the cluster state.
+* A Kubernetes SD configuration has a role type to discover targets. Supported role types include node, pod, service, endpoint, ingress. The role type for the enmasse job is pod. The pod role discovers all pods and exposes their containers as targets. For each declared port of a container, a single target is generated.
+* The `namespaces` configuration allows to restrict the discovery of targets to a specified set of namespaces. For the `enmasse` scraping job, the discovery is limited to the namespace of the Enmasse broker.
+* `relabel_configs`: Relabeling is a powerful tool to dynamically rewrite the label set of a target before it gets scraped. Multiple relabeling steps can be configured per scrape configuration. They are applied to the label set of each target in order of their appearance in the configuration file. Please refer to the Prometheus documentation for full details. +
+In short, the settings for the `enmasse` scraping job configure the job as follows:
+** Only the `artemismetrics` port is scraped
+** The `kubernetes_namespace` label is set to the value of the Kubernetes namespace of the discovered target. Labels help to select and filter metrics when building dashboards.
+** The `kubernetes_pod_name` label is set to the name of the Enmasse broker pod.
+. Replace the `prometheus` configmap with the modified file:
++
+----
+$ oc delete configmap prometheus -n $TOOLS_PRJ
+$ oc create configmap prometheus --from-file=openshift/prometheus/prometheus.yaml -n $TOOLS_PRJ
+----
+. Scale the Prometheus pod up and down to force a restart of the Prometheus pod:
++
+----
+$ oc scale deployment prometheus --replicas=0 -n $TOOLS_PRJ && oc scale deployment prometheus --replicas=1 -n $TOOLS_PRJ
+----
+. In a browser window, navigate to the Prometheus UI. Go to `Status -> Targets`. Expect to see the EnMasse target:
++
+image::images/prometheus_target.png[]
+. On the Prometheus landing page, open the metric drop-down box to see an overview of the metrics exposed by the EnMasse broker:
++
+image::images/prometheus_metrics.png[]
+. Select the `artemis_consumer_count metric`. Click on 	`Execute`. Expect to see the number of consumers per topic:
++
+image::images/prometheus_metrics_2.png[]
++
+Click on the `Graph` tab to see a graphical representation of the metrics:
++
+image::images/prometheus_metrics_3.png[]
+. Select the `artemis_message_count` metric. This metric returns the number of messages in a topic or queue that are not delivered to a consumer. The expected value is 0 for all the topics:
++
+image::images/prometheus_metrics_4.png[]
+. To see the metrics in action, scale down the dispatch service to 0 replicas:
++
+----
+$ oc scale dc dispatch-service --replicas=0 -n $SERVICES_PRJ
+----
+. Wait until the dispatch service pod is terminated, and put some load on the system:
++
+----
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 100, "type": 0}' $PASSENGER_SERVICE_URL/simulate
+----
+. Observe the `artemis_message_count` metrics graph on the Prometheus console. The message count for the `topic-ride-event` topic goes up to 100:
++
+image::images/prometheus_graph.png[]
+. Scale up the dispatch service to 1 replica:
++
+----
+$ oc scale dc dispatch-service --replicas=1 -n $SERVICES_PRJ
+----
++
+Observe how the message count for the `topic-ride-event` topic drops back to 0.
+
+=== Monitor the dispatch service
+
+Spring Boot apps expose MBeans which can be used to monitor the application performance. The Prometheus project provides a Java agent that can be deployed next to the application. The Java agent scans the MBeans, transforms the data they contain to Prometheus format, and exposes them on a HTTP endpoint using a built-in HTTP server on a different port than the application HTTP port (typically 9779). Note that the application container image needs to expose the Prometheus port. The `redhat-openjdk18-openshift` image used by the applications in this lab exposes port 9779.
+
+In this section of the lab we leverage the Prometheus JMX Java agent to obtain metrics from the dispatch service.
+
+. In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
+. Create a configmap for the Prometheus Java agent.
++
+----
+oc create configmap dispatch-service-prometheus-agent --from-file=openshift/dispatch-service/prometheus-agent.yaml -n $SERVICES_PRJ
+----
++
+The configuration file looks like:
++
+----
+---
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+blacklistObjectNames: ["Tomcat:*","org.springframework.boot:*","org.springframework.cloud.context.restart:*"]
+----
+* lowercaseOutputName : lowercase the output metric name.
+* lowercaseOutputLabelNames : lowercase the output metric label names
+* blacklistObjectNames : A list of ObjectNames to not query. The dispatch service does not use the embedded Tomcat server except for the health endpoint, so Tomcat metrics are not very useful in our case.
+. When building the image for the dispatch service, the Prometheus Java agent needs to be added to the image. That requires some changes to the build pipeline for the dispatch service, more specifically in the `Build Image` stage.
++
+----
+            stage ('Build Image') {
+              // make directory for binary upload
+              sh "mkdir -p xfer/prometheus"
+              // cp application binary to xfer
+              sh "cp target/${artifactId}-${version}.jar xfer"
+              // download prometheus jmx agent from maven central
+              sh "curl https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.3.1/jmx_prometheus_javaagent-0.3.1.jar > xfer/prometheus/jmx_prometheus_javaagent.jar"
+              openshift.withCluster() { // Use "default" cluster or fallback to OpenShift cluster detection
+                def bc = openshift.selector("bc", "${app_build}")
+                def builds = bc.startBuild("--from-dir=xfer")
+                timeout (15) {
+                  builds.watch {
+                    if ( it.count() == 0 ) {
+                      return false
+                    }
+                    // Print out the build's name and terminate the watch
+                    echo "Detected new builds created by buildconfig: ${it.names()}"
+                    return true
+                  }
+                  builds.untilEach(1) {
+                    return it.object().status.phase == "Complete"
+                  }
+                }
+              }
+            }
+----
+. Deploy the modified pipeline to OpenShift
++
+----
+$ oc process -f openshift/dispatch-service/dispatch-service-monitoring-pipeline.yaml -p BC_NAME=dispatch-service-monitoring-pipeline -p GIT_URL=http://gogs:3000 -p GIT_REPO=acme/dispatch-service.git -p APP_BUILD=dispatch-service-binary -p APP_PROJECT=$SERVICES_PRJ -p JENKINS_PROJECT=$TOOLS_PRJ -p APP_IMAGESTREAM=dispatch-service -p APP_DC=dispatch-service | oc create -f - -n $TOOLS_PRJ
+----
+. Start the `dispatch-service-monitoring-pipeline` pipeline.
++
+----
+$ oc start-build dispatch-service-monitoring-pipeline -n $TOOLS_PRJ
+----
++
+Wait until the pipeline is completely executed.
+. Replace the deploymentconfig of the dispatch service with a deploymentconfig that configures the Prometheus Java Agent.
+* Review the deploymentconfig template at `openshift/dispatch-service/dispatch-service-tracing-monitoring-template.yaml`. Note the Prometheus Java agent configuration:
++
+----
+[...]
+        containers:
+        - env:
+          - name: JAVA_OPTIONS
+            value: >
+              -javaagent:/deployments/prometheus/jmx_prometheus_javaagent.jar=9779:/prometheus-agent-config/prometheus-agent.yaml
+              -Djavax.net.ssl.trustStore=/app/truststore/enmasse.jks
+              -Djavax.net.ssl.trustStorePassword=password
+              -Djavax.net.ssl.trustStoreType=JKS
+              -Dorg.quartz.properties=/app/config/jbpm-quartz.properties
+[...]
+          volumeMounts:
+          - mountPath: /app/truststore
+            name: truststore
+          - name: config
+            mountPath: /app/config
+          - name: prometheus-agent-config
+            mountPath: /prometheus-agent-config
+[...]
+        volumes:
+        - secret:
+            defaultMode: 420
+            secretName: ${APPLICATION_TRUSTSTORE}
+          name: truststore
+        - configMap:
+            name: ${APPLICATION_CONFIGMAP}
+          name: config
+        - configMap:
+            name: dispatch-service-prometheus-agent
+          name: prometheus-agent-config
+----
+* Replace the depoymentconfig:
++
+----
+$ oc delete dc dispatch-service -n $SERVICES_PRJ
+$ oc process -f openshift/dispatch-service/dispatch-service-tracing-monitoring-template.yaml -p APPLICATION_NAME=dispatch-service -p APPLICATION_CONFIGMAP=dispatch-service -p APPLICATION_TRUSTSTORE=enmasse-truststore -p JAEGER_COLLECTOR_NAMESPACE=$TOOLS_PRJ | oc create -f - -n $SERVICES_PRJ
+----
+* Check that the Prometheus Java agent is working correctly. +
+In the OpenShift console, navigate to the dispatch service pod, click on the `Terminal` tab and type `curl localhost:9779`. Expect to see the metrics exposed by the application MBeans in Prometheus format:
++
+image::images/dispatch-service-prometheus-metrics.png[]
+
+. Define a scrape job on Prometheus to scrape the dispatch service metrics. Open the `openshift/prometheus/prometheus.yaml` file in the `installation` project of the lab material in a text editor. Add the following contents to the end of the file. Replace `<services project>` with the name of OpenShift project where you deployed the dispatch service.
++
+----
+- job_name: 'dispatch-service'
+  kubernetes_sd_configs:
+  - role: endpoints
+    namespaces:
+      names:
+      - <services project>
+
+  relabel_configs:
+  - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+    action: keep
+    regex: true
+  - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+    action: replace
+    target_label: __metrics_path__
+    regex: (.+)
+  - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+    action: replace
+    target_label: __address__
+    regex: ([^:]+)(?::\d+)?;(\d+)
+    replacement: $1:$2
+  - source_labels: [__meta_kubernetes_namespace]
+    action: replace
+    target_label: kubernetes_namespace
+  - source_labels: [__meta_kubernetes_service_name]
+    action: replace
+    target_label: kubernetes_name
+----
+* The role type for the scrape job is `endpoints`. The endpoints role discovers targets from listed endpoints of a Kubernetes service. For each endpoint address one target is discovered per port. If the endpoint is backed by a pod, all additional container ports of the pod, not bound to an endpoint port, are discovered as targets as well.
+* A discovered endpoint requires an annotation `prometheus.io/scrape` set to true in order to be scraped.
+* The `prometheus.io/path` annotation defines the path of the prometheus HTTP endpoint.
+* The `prometheus.io/port` annotation defines the port of the prometheus HTTP endpoint.
+
+. Replace the `prometheus` configmap with the modified file:
++
+----
+$ oc delete configmap prometheus -n $TOOLS_PRJ
+$ oc create configmap prometheus --from-file=openshift/prometheus/prometheus.yaml -n $TOOLS_PRJ
+----
+. Patch the `dispatch-service` service to add the required annotations for the Prometheus scraping job:
++
+----
+$ oc patch service dispatch-service -p '{"metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"9779","prometheus.io/scrape":"true"}}}' -n $SERVICES_PRJ
+----
+. Scale the Prometheus pod up and down to force a restart of the Prometheus pod:
++
+----
+$ oc scale deployment prometheus --replicas=0 -n $TOOLS_PRJ && oc scale deployment prometheus --replicas=1 -n $TOOLS_PRJ
+----
+. In a browser window, navigate to the Prometheus UI. Go to `Status -> Targets`. Expect to see the dispatch service target:
++
+image::images/prometheus_target_1.png[]
+. On the Prometheus landing page, open the metric drop-down box to see an overview of the metrics exposed by the EnMasse broker and the dispatch service. Note that the dispatch service exposes metrics pertaining to the datasource connection pools (metrics starting with `org_apache_commons_dbcp2`)
+
+=== SQL metrics
+
+https://github.com/chop-dbhi/prometheus-sql[Prometheus SQL] is a service that generates basic metrics for SQL result sets and exposes them as Prometheus metrics. It executes SQL queries at a regular interval and exposes the resultset as Prometheus metrics.
+
+In this section of the lab, we leverage Prometheus SQL to measure the number of `Ride` entities per status, as well as the number of process instances created.
+
+. In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
+. Review the Prometheus SQL configuration file at `openshift/prometheus-sql/prometheus-sql.yml`. The configuration defines the database(s) to connect to:
++
+----
+defaults:
+  data-source: datasource
+  query-interval: 30s
+  query-timeout: 5s
+  query-value-on-error: -1
+
+# Defined data sources
+data-sources:
+  datasource:
+    driver: postgresql
+    properties:
+      host: dispatch-service-postgresql
+      port: 5432
+      user: jboss
+      password: jboss
+      database: rhpam
+      sslmode: disable
+----
+. The queries to execute are defined in the `openshift/prometheus-sql/queries.yml` file:
++
+----
+- ride_per_status:
+    sql: >
+        SELECT status, count(id) as cnt FROM ride GROUP BY status
+    data-field: cnt
+- ride_created:
+    sql: >
+        SELECT processname, count(1) as cnt FROM processinstancelog GROUP BY processname
+    data-field: cnt
+----
+* `data-field` defines which column to expose as metrics.
+* The Prometheus metrics are prefixed with `query_result_`.
+. Create the configmap in the services project on OpenShift:
++
+----
+$ oc create configmap prometheus-sql-config --from-file=openshift/prometheus-sql/prometheus-sql.yml --from-file=openshift/prometheus-sql/queries.yml -n $SERVICES_PRJ
+----
+. Review the Prometheus SQL template at `openshift/prometheus-sql/prometheus-sql-template.yaml`.
+. Deploy the Prometheus SQL image in the services project:
++
+----
+$ oc create -f openshift/prometheus-sql/prometheus-sql-template.yaml -n $SERVICES_PRJ
+----
+. Check the logs of the `prometheussql` pod. Expect to see something like:
++
+----
+2018/09/02 07:56:56 prometheus-sql starting up...
+2018/09/02 07:56:56 Load config from file [/config/prometheus-sql.yml]
+2018/09/02 07:56:56 Load queries from file [/config/queries.yml]
+2018/09/02 07:56:56 * Listening on 0.0.0.0:8080...
+[ride_per_status] 2018/09/02 07:56:56 Fetch took 27.982118ms
+Creating ride_per_status{"status":6}
+Creating ride_per_status{"status":7}
+Creating ride_per_status{"status":4}
+Registering metric ride_per_status{"status":4}
+Registering metric ride_per_status{"status":7}
+Registering metric ride_per_status{"status":6}
+[ride_created] 2018/09/02 07:56:56 Fetch took 30.410054ms
+Creating ride_created{"processname":"dispatch-process"}
+Registering metric ride_created{"processname":"dispatch-process"}
+[ride_per_status] 2018/09/02 07:57:26 Fetch took 788.363µs
+[ride_created] 2018/09/02 07:57:26 Fetch took 2.983659ms
+----
+
+. Define a scrape job on Prometheus to scrape the SQL metrics. Open the `openshift/prometheus/prometheus.yaml` file in the `installation` project of the lab material in a text editor. Add the following contents to the end of the file. Replace `<services project>` with the name of OpenShift project where you deployed the dispatch service.
++
+----
+- job_name: 'dispatch-service-pgsql'
+  kubernetes_sd_configs:
+  - role: service
+    namespaces:
+      names:
+      - services-bt
+
+  relabel_configs:
+  - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_probe]
+    action: keep
+    regex: true
+  - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+    action: replace
+    target_label: __metrics_path__
+    regex: (.+)
+  - source_labels: [__meta_kubernetes_namespace]
+    action: replace
+    target_label: kubernetes_namespace
+  - source_labels: [__meta_kubernetes_service_name]
+    action: replace
+    target_label: kubernetes_name
+----
+. Prometheus uses rule files to configure recording rules. Recording rules allow to precompute frequently needed or computationally expensive expressions and save their result as a new set of time series. Querying the precomputed result will then often be much faster than executing the original expression every time it is needed.
+* As an example, let’s say you want to monitor the per-second rate of creation of dispatch process instances , as measured over the last 5 minutes. Using the Prometheus PromQL syntax, this can be expressed as:
++
+----
+rate(query_result_ride_created{processname="dispatch-process"}[5m])
+----
+* Review the recording rules file at `openshift/prometheus/dispatch-service.rules`:
++
+----
+groups:
+- name: dispatch_service
+  rules:
+  - record: ride:requested:rate5m
+    expr: rate(query_result_ride_per_state{state="1"}[5m])
+  - record: ride:assigned:rate5m
+    expr: rate(query_result_ride_per_state{state="2"}[5m])
+  - record: ride:canceled:rate5m
+    expr: rate(query_result_ride_per_state{state="4"}[5m])
+  - record: ride:started:rate5m
+    expr: rate(query_result_ride_per_state{state="5"}[5m])
+  - record: ride:ended:rate5m
+    expr: rate(query_result_ride_per_state{state="6"}[5m])
+  - record: ride:expired:rate5m
+    expr: rate(query_result_ride_per_state{state="7"}[5m])
+  - record: ride:created:rate5m
+    expr: rate(query_result_ride_created{processname="dispatch-process"}[5m])
+----
+. Replace the `prometheus` configmap with the modified `prometheus.yaml` and the `dispatch-service.rules` file:
++
+----
+$ oc delete configmap prometheus -n $TOOLS_PRJ
+$ oc create configmap prometheus --from-file=openshift/prometheus/prometheus.yaml --from-file=openshift/prometheus/dispatch-service.rules -n $TOOLS_PRJ
+----
+. Scale the Prometheus pod up and down to force a restart of the Prometheus pod:
++
+----
+$ oc scale deployment prometheus --replicas=0 -n $TOOLS_PRJ && oc scale deployment prometheus --replicas=1 -n $TOOLS_PRJ
+----
+. In a browser window, navigate to the Prometheus UI. Go to `Status -> Targets`. Expect to see the `dispatch-service-pgsql` target:
++
+image::images/prometheus_target_2.png[]
+. In the Prometheus UI, navigate to `Status -> Rules`. Expect to see the rules defined in the `dispatch-service.rules` file:
++
+image::images/prometheus_rules.png[]
+. In the Rules view click on one of the rules, for example `ride:created:5m`. The rule expression is copied into the metric box in the landing page and executed.
++
+image::images/prometheus_metrics_5.png[]
+. Put some load on the system:
++
+----
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 500, "type": 0}' $PASSENGER_SERVICE_URL/simulate
+----
+. Observe the graph of the `ride:created:5m` - you need to click `Execute` to refresh the graph:
++
+image::images/prometheus_graph_3.png[]
+
+=== Grafana
+
+The Prometheus UI capabilities to visualize metrics data are quite limited, that’s why Prometheus is often used in combination with Grafana to create dashboards.
+
+In this section of the lab you deploy Grafana to OpenShift and create some dashboards based on metrics collected by Prometheus.
+
+TODO
