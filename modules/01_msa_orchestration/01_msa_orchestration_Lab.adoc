@@ -226,6 +226,7 @@ _started_ and the service waits for a _RideEndedEvent_.
 * If a _RideEndedEvent_ is received, a _HandlePaymentCommand_ message is sent to the _topic-passenger-command_ topic. The status of the ride is set to _ended_.
 
 Note that several other use cases are currently not implemented in the lab:
+
 * The driver can cancel a ride
 * The passenger can cancel a ride before the ride is assigned to a driver.
 
@@ -247,7 +248,7 @@ image::images/dispatch_process_timer.png[]
 image::images/dispatch_process_send_message.png[]
 +
 image::images/dispatch_process_send_message_data_io.png[]
-** The _Ride Request Expired_ node uses the _UpdateRide_ workitemhandler, whose implementation updates the status of the Ride entity.
+** The _Ride Request Expired_ node uses the _UpdateRide_ WorkItemHandler, whose implementation updates the status of the Ride entity.
 +
 image::images/dispatch_process_update_ride.png[]
 +
@@ -599,10 +600,10 @@ map[config.json:{"apiVersion":"enmasse.io/v1","kind":"Address","metadata":{"name
 +
 [source,text]
 ----
-$ oc get route console -o template --template {{.spec.host}} -n $ENMASSE_PRJ
+$ echo "https://$(oc get route console -o template --template {{.spec.host}} -n $ENMASSE_PRJ)"
 ----
 * Alternatively, obtain the URL from route definition in the OpenShift console
-* Copy the URL of the console, and paste in a web browser, prefixed with `https://`. Accept the security exception for using self-signed certificates. The landing page of the console opens:
+* In a web browser navigate to the URL of the console. Accept the security exception for using self-signed certificates. The landing page of the console opens:
 +
 image::images/enmasse_console_landingpage.png[]
 * Note that no login is required. This is because we use the `none` authentication service.
@@ -735,9 +736,9 @@ $ oc rollout resume dc/gogs -n $TOOLS_PRJ
 +
 [source,text]
 ----
-$ echo $(oc get route gogs -o jsonpath='{.spec.host}' -n $TOOLS_PRJ)
+$ echo "http://$(oc get route gogs -o jsonpath='{.spec.host}' -n $TOOLS_PRJ)"
 ----
-. In a web browser window,, navigate to the gogs URL. Expect to see the Gogs landing page.
+. In a web browser window, navigate to the gogs URL. Expect to see the Gogs landing page.
 +
 image::images/gogs_landing_page.png[]
 . Create an admin user - the first user created on Gogs has admin privileges:
@@ -794,6 +795,11 @@ $ oc create secret generic pgadmin4-credentials --from-literal=pgadmin4.username
 ----
 $ oc apply -f openshift/pgadmin4/deployment.yaml -n $TOOLS_PRJ
 ----
+. Get the URL for the `pgadmin4` route:
++
+----
+$ echo "http://$(oc get route pgadmin4 -o jsonpath='{.spec.host}' -n $TOOLS_PRJ)"
+----
 . In a browser window, navigate to the URL of the pgAdmin4 route. Login with `admin@example.com/admin123`. Expect to see the landing page of pgAdmin4.
 +
 image::images/pgadmin4_landing_page.png[]
@@ -844,6 +850,11 @@ $ oc create -f openshift/jenkins/jenkins-maven-slave-pvc.yaml -n $TOOLS_PRJ
 [source,text]
 ----
 $ oc process -f openshift/jenkins/jenkins-persistent.yaml -p MEMORY_LIMIT=1Gi | oc create -f - -n $TOOLS_PRJ
+----
+. Get the URL for the `jenkins` route:
++
+----
+$ echo "https://$(oc get route jenkins -o jsonpath='{.spec.host}' -n $TOOLS_PRJ)"
 ----
 . Wait until the Jenkins pod is up and running. In a browser window, navigate to the  URL of the Jenkins route. Accept the security exception. Log in with your Openshift username and password. The first time you login, you need to authorize the Jenkins service account access to your Openshift profile. Click `Allow selected permissions`. You are redirected to the Jenkins landing page.
 +
@@ -1354,6 +1365,7 @@ dispatch.assign.driver.expire.duration=5M
 logging.level.org.jbpm.executor.impl=WARN
 logging.level.com.acme.ride=DEBUG
 ----
+* narayana.dbcp.max-total: maximum number of connections in the datasource connection pool managed by the Naryana transaction manager.
 * Set the `amqp.host` property to the hostname of the EnMasse `messaging` service.
 * Set the `postgresql.host` property to the hostname of the PostgreSQL service. +
 As the PostgreSQL database is deployed in the same OpenShift project as the application, you can use the service name: `dispatch-service-postgresql`.
@@ -1448,7 +1460,8 @@ The passenger service exposes a REST endpoint, which when called will send 1 or 
 +
 [source,text]
 ----
-$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 1}' http://<url of the passenger service route>/simulate
+$ PASSENGER_SERVICE_URL=$(echo "http://$(oc get route passenger-service -o jsonpath='{.spec.host}' -n $SERVICES_PRJ)")
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 1}' $PASSENGER_SERVICE_URL/simulate
 ----
 .Output
 +
@@ -1530,13 +1543,13 @@ This connection represents the `ProducerVerticle` in the driver service.
 image::images/enmasse_console_connections_3.png[]
 +
 This connection is from the passenger service. It shows 10 receivers because we use a pool of 10 message listeners.
-* The other connections are from the `ConsumerVerticle` in the driver service, the message listeners in the dispatch service (3 times 10 listeners), and the message producer in the dispatch service (which uses a different connection factory than the listeners).
+* The other connections are from the `ConsumerVerticle` in the driver service and from the message listeners and producer in the dispatch service (3 times 20 listeners).
 
 . Send a command to the REST API of the passenger service to send a `RideRequestedEvent` message of type 2.
 +
 [source,text]
 ----
-$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 2}' http://<url of the passenger service route>/simulate
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 2}' $PASSENGER_SERVICE_URL/simulate
 ----
 +
 A type 2 message mimicks the scenario where the passenger cancels the ride: ride requested -> driver assigned -> passenger cancelled.
@@ -1567,7 +1580,7 @@ Passenger cancelled
 +
 [source,text]
 ----
-$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 2}' http://<url of the passenger service route>/simulate
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 2}' $PASSENGER_SERVICE_URL/simulate
 ----
 +
 A type 3 message mimicks the scenario where no driver can be assigned to the ride: ride requested -> request expires. It will actually take 5 minutes before the ride expires.
@@ -1584,7 +1597,7 @@ A type 3 message mimicks the scenario where no driver can be assigned to the rid
 +
 [source,text]
 ----
-$ curl -X POST -H "Content-type: application/json" -d '{"messages": 100, "type": 0}' http://<url of the passenger service route>/simulate
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 100, "type": 0}' $PASSENGER_SERVICE_URL/simulate
 ----
 +
 As an example, this would be a typical distribution of the state of the `Ride` entity:
@@ -1602,7 +1615,7 @@ $ oc scale dc dispatch-service --replicas=0 -n $SERVICES_PRJ
 +
 [source,text]
 ----
-$ curl -X POST -H "Content-type: application/json" -d '{"messages": 10, "type": 0}' http://<url of the passenger service route>/simulate
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 10, "type": 0}' $PASSENGER_SERVICE_URL/simulate
 ----
 * Scale up the dispatch service.
 +
@@ -1621,7 +1634,7 @@ $ oc scale dc dispatch-service --replicas=2 -n $SERVICES_PRJ
 +
 [source,text]
 ----
-$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 1}' http://<url of the passenger service route>/simulate
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 1}' $PASSENGER_SERVICE_URL/simulate
 ----
 * Check the logs of the dispatch server, notice that the `RideRequestedEvent` message and following messages is being consumed on only 1 node.
 * Send a bunch of messages. Check the logs and notice that message handling is distributed over the dispatch service pods.
@@ -1773,7 +1786,12 @@ Jaeger is installed in the tools project.
 ----
 $ oc process -f openshift/jaeger/jaeger-all-in-one.yaml | oc create -f - -n $TOOLS_PRJ
 ----
-. Wait until the jaeger pod is up and running. In a browser window, navigate to the URL of the Jaeger UI route. Expect to see the Jaeger UI landing page:
+. Get the URL for the `jaeger-query` route:
++
+----
+$ echo "https://$(oc get route jaeger-query -o jsonpath='{.spec.host}' -n $TOOLS_PRJ)"
+----
+. Wait until the jaeger pod is up and running. In a browser window, navigate to the URL of the `jaeger-query` route. Expect to see the Jaeger UI landing page:
 +
 image::images/jaeger_landing_page.png[]
 
@@ -1976,7 +1994,7 @@ $ oc process -f openshift/dispatch-service/dispatch-service-tracing-template.yam
 +
 [source,text]
 ----
-$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 1}' http://<url of the passenger service route>/simulate
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 1}' $PASSENGER_SERVICE_URL/simulate
 ----
 . Wait a couple of seconds for the dispatch process to complete. Navigate to the Jaeger UI in a browser window. In the left pane, select `passenger-service` in the `Service` drop down box. Click `Find Traces`. +
 Expect to see one trace, generated from the REST call:
@@ -1997,7 +2015,7 @@ image::images/jaeger_trace_details_1.png[]
 +
 [source,text]
 ----
-$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 2}' http://<url of the passenger service route>/simulate
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 2}' $PASSENGER_SERVICE_URL/simulate
 ----
 . In the Jaeger UI, navigate to the landing page. Refresh the traces by clicking on the `Find Traces` button. Expect to see a second trace, with 10 spans. Click on the trace to see the details:
 +
@@ -2006,7 +2024,7 @@ image::images/jaeger_trace_details_2.png[]
 +
 [source,text]
 ----
-$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 3}' http://<url of the passenger service route>/simulate
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 3}' $PASSENGER_SERVICE_URL/simulate
 ----
 . In the Jaeger UI, navigate to the landing page. Refresh the traces. Expect to see three traces. The most recent trace has where the with 10 spans.
 +
