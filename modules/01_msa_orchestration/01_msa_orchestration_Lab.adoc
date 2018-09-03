@@ -684,7 +684,7 @@ Ansible playbooks.
 +
 ----
 $ export TOOLS_PRJ=tools-<unique suffix>
-$ oc new-project $ENMASSE_PRJ
+$ oc new-project $TOOLS_PRJ
 ----
 . Obtain the name of your Openshift domain.
 +
@@ -696,7 +696,7 @@ $ oc delete route testroute -n $TOOLS_PRJ
 . Deploy Gogs using the template in the `openshift/gogs` folder:
 +
 ----
-$ oc process -f openshift/gogs/gogs-persistent-template.yaml --param=APPLICATION_NAME=gogs--param=HOSTNAME=gogs-$TOOLS_PRJ.$DOMAIN --param=GOGS_VERSION=0.11.34 --param=DATABASE_USER=gogs --param=DATABASE_PASSWORD=gogs --param=DATABASE_NAME=gogs --param=SKIP_TLS_VERIFY=true | oc create -f - -n $TOOLS_PRJ
+$ oc process -f openshift/gogs/gogs-persistent-template.yaml --param=APPLICATION_NAME=gogs --param=HOSTNAME=gogs-$TOOLS_PRJ.$DOMAIN --param=GOGS_VERSION=0.11.34 --param=DATABASE_USER=gogs --param=DATABASE_PASSWORD=gogs --param=DATABASE_NAME=gogs --param=SKIP_TLS_VERIFY=true | oc create -f - -n $TOOLS_PRJ
 ----
 * Note that the deployment for the gogs server is paused.
 . Wait until the PostgreSQL pod is up and running.
@@ -1231,13 +1231,13 @@ The main difference between the dispatch service and the other services is the u
 * Create a configmap with the scripts:
 +
 ----
-$ oc create configmap dispatch-service-postgresql-init --from-file=openshift/dispatch-service-postgresql/postgresql -n $SERVICES_PRJ
+$ oc create configmap dispatch-service-postgresql-init --from-file=openshift/dispatch-service/postgresql -n $SERVICES_PRJ
 ----
 . Review the `openshift/dispatch-service-postgresql/postgresql-persistent-template.yaml` template. Notice the use of the init-container in the `spec.strategy.recreateParams.execNewPod` section of the deployment config.
 . Deploy PostgreSQL using the template:
 +
 ----
-$ oc new-app -f openshift/dispatch-service-postgresql/postgresql-persistent-template.yaml  -param=APPLICATION_NAME=dispatch-service --param=DATABASE_SERVICE_NAME=dispatch-service-postgresql --param=POSTGRESQL_USER=jboss --param=POSTGRESQL_PASSWORD=jboss --param=POSTGRESQL_DATABASE=rhpam --param=POSTGRESQL_MAX_CONNECTIONS=100 --param=POSTGRESQL_MAX_PREPARED_TRANSACTIONS=100 -n $SERVICES_PRJ
+$ oc new-app -f openshift/dispatch-service/postgresql-persistent-template.yaml --param=APPLICATION_NAME=dispatch-service --param=DATABASE_SERVICE_NAME=dispatch-service-postgresql --param=POSTGRESQL_USER=jboss --param=POSTGRESQL_PASSWORD=jboss --param=POSTGRESQL_DATABASE=rhpam --param=POSTGRESQL_MAX_CONNECTIONS=100 --param=POSTGRESQL_MAX_PREPARED_TRANSACTIONS=100 -n $SERVICES_PRJ
 ----
 . When the PostgreSQL pod is up and running, verify that the database schema has been creaed correctly.
 * In a browser window, navigate to the URL of the pgAdmin4 route. Log in with `admin@example.com/admin123`
@@ -1339,7 +1339,7 @@ $ oc start-build dispatch-service-pipeline -n $TOOLS_PRJ
 ----
 . Follow the progression of the build pipeline in the OpenShift console. Expect the pipeline to complete successfully. +
 If the pipeline build fails, check the pipeline build logs to see what went wrong, and if needed fix the issue.
-. Once the pipeline has executed, checkthat the dipatch service has deployed successfully.
+. Once the pipeline has executed, check that the dipatch service has deployed successfully.
 +
 image::images/openshift_service_deployed_2.png[]
 . In the OpenShift console, navigate to the dispatch service pod, and check the logs of the pod. Alternatively you can use `oc logs -f <name of the pod>`. +
