@@ -2424,4 +2424,71 @@ The Prometheus UI capabilities to visualize metrics data are quite limited, that
 
 In this section of the lab you deploy Grafana to OpenShift and create some dashboards based on metrics collected by Prometheus.
 
-TODO
+. In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
+. Create a service account for Grafana in the tools project
++
+----
+$ oc create sa grafana -n $TOOLS_PRJ
+----
+. The `openshift/grafana` directory of the lab source material contains a Grafana configuration file named `defaults.ini`. Create a configmap from this file:
++
+----
+$ oc create configmap grafana-config --from-file=openshift/grafana/defaults.ini -n $TOOLS_PRJ
+----
+. Review the `openshift/grafana/grafana.yaml` template for Grafana.
+* The template defines a route, a service and a deployment API object.
+* By default, the Grafana UI web application is bound to port 3000.
+* The Grafana image runs under the grafana service account.
+* The Grafana data is stored on temporary storage on the pod’s node.
+* The `grafana-config` configmap is mounted inside the Grafana pod in the `/root/go/src/github.com/grafana/grafana/conf` directory.
+. Deploy Grafana to your OpenShift environment:
++
+----
+$ oc process -f openshift/grafana/grafana.yaml | oc create -f - -n $TOOLS_PRJ
+----
+. Get the URL for the Grafana route:
++
+----
+$ echo "http://$(oc get route grafana -o jsonpath='{.spec.host}' -n $TOOLS_PRJ)"
+----
+. In a web browser, navigate to the URL of the Grafana route. Expect to see the Grafana Homepage.
++
+image::images/grafana_landing_page.png[]
+. Click on `Add data source` to configure a data source for Prometheus. On the `Add data source` page:
+* Use `prometheus` as data source name.
+* Choose `Prometheus` as data source type.
+* The url should correspond to the Prometheus service URL, `http://prometheus:9090`.
+* Leave the other settings as is.
+* Click `add`. Expect to see a message that the data source is working. If not, verify and correct your input values.
+* *Back on the Grafana home page, click on `New dashboard` to create a dashboard. Click on the graph icon. Expect to see an empty graph.
++
+image::images/grafana_graph.png[]
+. Click on the `Panel title` link, and then on the `Edit` link. Expect the Graph edit page to appear:
++
+image::images/grafana_graph_1.png[]
+. On the `Metrics` tab, enter the query for the data. For example, to plot then number of messages in the EnMasse topics, enter `artemis_message_count{address="topic-driver-command"}`. Note that Grafana auto-suggests the metric names obtained from Prometheus. Set the `Legend format` to `topic-driver-command`.
++
+image::images/grafana_graph_2.png[]
++
+Repeat for the other topics.
++
+image::images/grafana_graph_3.png[]
+. Give a title to the graph in the `General` pane, and close the edit section.
+. Create dashboard panes for metrics you are interested in. Suggested metrics are: the number of active connections in the datasource pools of the dispatch service (metrics start with `org_apache_commons_dbcp2`), JVM CPU and memory consumption for the dispatch service, The SQL metrics obtained from the dispatch service database.
++
+image::images/grafana_graph_4.png[]
+. Put some load on the system to generate data for the dashboard. If you have SoapUI installed on you system, the `soapui` project in the lab material has a SoapUI load test project.
+* If needed, download and install SoapUI from https://www.soapui.org.
+* Launch SoapUI, and open the project `acme-ride-soapui-project.xml` in the soapui project of the lab material.
+* In the custom properties of the SoapUI project, set the value of the `OpenShiftEndpoint` property to the route URL of the passenger service application in OpenShift.
++
+image::images/soapui_properties.png[]
+* In the Soapui project, navigate to the `LoadTest 1` load test. Open the load test and click on the green arrow icon to launch the test. This will generate approx 3 `RideRequestedEvent` messages per second during 5 minutes
++
+image::images/soapui_load_test.png[]
+. Observe the Grafana console:
++
+image::images/grafana_graph_5.png[]
+
+
+Congratulations! You made it to the end of the lab.
