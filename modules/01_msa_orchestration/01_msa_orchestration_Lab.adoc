@@ -307,6 +307,7 @@ narayana.default-timeout=120
 ----
 +
 Note that for correct transaction recovery behavior, each Narayana transaction manager instance must be started with a unique id. Also, the transaction logs should be written to a persistent data volume. These functionalities have not been implemented for this lab.
++
 ** The Narayana DBCP2 pool configuration properties are prefixed with `narayana.dbcp`:
 +
 ----
@@ -390,7 +391,7 @@ The `kmodule.xml` descriptor and the dispatch process definition are bundled in 
         } finally {
             runtimeManager.disposeRuntimeEngine(engine);
         }
-            });
+    });
 ----
 
 * WorkItemHandlers
@@ -1552,8 +1553,8 @@ The passenger service exposes a REST endpoint, which when called will send 1 or 
 $ PASSENGER_SERVICE_URL=$(echo "http://$(oc get route passenger-service -o jsonpath='{.spec.host}' -n $SERVICES_PRJ)")
 $ curl -X POST -H "Content-type: application/json" -d '{"messages": 1, "type": 1}' $PASSENGER_SERVICE_URL/simulate
 ----
-.Output
 +
+.Output
 ----
 Sent 1 message(s) with type 1
 ----
@@ -2094,9 +2095,9 @@ The central component of Prometheus is the Prometheus server. The Prometheus ser
 
 The data gathered and stored by the Prometheus server can be queried using the PromQL language. The Prometheus UI has some limited capacities to show graphs from the collected metrics. Prometheus is often used together with https://grafana.com[Grafana] to provide dashboards on top of the metrics collected by Prometheus.
 
-This diagram illustrates the architecture of Prometheus and some of its ecosystem components:
+This diagram illustrates the architecture of Prometheus:
 
-image::images/prometheus-architecture.svg[]
+image::images/prometheus_architecture.png[]
 
 In this section of the lab you deploy Prometheus in your OpenShift environment, and configure it to scrape metrics from the EnMasse broker and the dispatch service.
 
@@ -2615,7 +2616,7 @@ image::images/grafana_landing_page.png[]
 * The url should correspond to the Prometheus service URL, `http://prometheus:9090`.
 * Leave the other settings as is.
 * Click `add`. Expect to see a message that the data source is working. If not, verify and correct your input values.
-* *Back on the Grafana home page, click on `New dashboard` to create a dashboard. Click on the graph icon. Expect to see an empty graph.
+* Back on the Grafana home page, click on `New dashboard` to create a dashboard. Click on the graph icon. Expect to see an empty graph.
 +
 image::images/grafana_graph.png[]
 . Click on the `Panel title` link, and then on the `Edit` link. Expect the Graph edit page to appear:
