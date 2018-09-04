@@ -199,7 +199,7 @@ The material consists of a number of git repositories:
 * *dispatch-service* : the source code for the dispatch service.
 * *driver-service* : the source code for the driver service.
 * *passenger-service* : the source code for the passenger service.
-* *dispatch-service-kjar* : a kjar that contains the process definition used in the dipatch service. Note that in this lab we do not use this kjar - the process definition was copied into the dispatch service.
+* *dispatch-service-kjar* : a kjar that contains the process definition used in the dispatch service. Note that in this lab we do not use this kjar - the process definition was copied into the dispatch service.
 * *installation* : Ansible playbooks to install the different components on OpenShift and OPenShift resource files.
 * *soapui* : SoapUI project to generate load in the system.
 
@@ -1339,7 +1339,7 @@ $ oc start-build dispatch-service-pipeline -n $TOOLS_PRJ
 ----
 . Follow the progression of the build pipeline in the OpenShift console. Expect the pipeline to complete successfully. +
 If the pipeline build fails, check the pipeline build logs to see what went wrong, and if needed fix the issue.
-. Once the pipeline has executed, check that the dipatch service has deployed successfully.
+. Once the pipeline has executed, check that the dispatch service has deployed successfully.
 +
 image::images/openshift_service_deployed_2.png[]
 . In the OpenShift console, navigate to the dispatch service pod, and check the logs of the pod. Alternatively you can use `oc logs -f <name of the pod>`. +
