@@ -255,11 +255,147 @@ image::images/dispatch_process_update_ride_data_io.png[]
 
 === Data model
 
-TODO
+The state of a Ride is captured in the `Ride` entity.
+
+----
+@Entity
+@SequenceGenerator(name="RideSeq", sequenceName="RIDE_SEQ")
+@Table(name = "Ride")
+public class Ride {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO, generator="RideSeq")
+    private long id;
+
+    private String rideId;
+
+    private String pickup;
+
+    private String destination;
+
+    private int status;
+
+    private BigDecimal price;
+
+    private String passengerId;
+
+    private String driverId;
+
+    //getter and setters
+    [...]
+----
+
+The `Ride` entity is stored in the RHPAM database (this is done is this lab to keep things simple). The `Ride` entity is added to the list of persistent classes in `META-INF/jbpm-persistence.xml`.
+
+CRUD operations are done through the `com.acme.ride.dispatch.dao.RideDao` class.
+
+The `rideId` property is used as correlation key when starting an instance of the dispatch service process.
 
 === RHPAM engine embedded in Spring Boot application
 
-TODO
+Setting up the embedded RHPAM engine requires to pay attention to a number of components required for the correct functioning of the engine.
+
+* JTA Transaction manager.
+** The transaction manager used is _Narayana_, the transaction manager from WildFly and EAP.
+** The Spring Boot project provides a starter for Narayana, but it does not support datasource connection pools.
+** The Snowdrop project, the upstream of the RHOAR Spring Boot engineering efforts, has an alternative Narayana Spring Boot starter which does supports connection pools with Apache DPCP2.
+** The Narayana transaction manager configuration properties are prefixed with `narayana`.
++
+----
+narayana.transaction-manager-id=1
+narayana.default-timeout=120
+----
++
+Note that for correct transaction recovery behavior, each Narayana transaction manager instance must be started with a unique id. Also, the transaction logs should be written to a persistent data volume. These functionalities have not been implemented for this lab.
+** The Narayana DBCP2 pool configuration properties are prefixed with `narayana.dbcp`:
++
+----
+narayana.dbcp.enabled=true
+narayana.dbcp.defaultAutoCommit=false
+----
++
+----
+narayana.dbcp.max-total=20
+----
+
+* Datasources:
+** The RHPAM engine uses a JTA managed XA datasource. When using Quartz to hande persistent timers, you also need to provide a non-managed datasource for Quartz.
+** The managed and the unmanaged datasources use a datasource connection pool powered by the Apache DBCP2 library.
+** The datasources are configured in the `com.acme.ride.dispatch.DataSourceConfiguration` class.
+** The datasource configuration properties are prefixed with `spring.datasource`:
++
+----
+spring.datasource.username=jboss
+spring.datasource.password=jboss
+spring.datasource.url=jdbc:postgresql://${postgresql.host}:5432/rhpam
+----
+** The datasource connection pool configuration properties for the unmaged datasource are prefixed with `spring.datasource.dbcp2`
++
+----
+spring.datasource.dbcp2.default-auto-commit=false
+spring.datasource.dbcp2.max-total=5
+spring.datasource.dbcp2.max-idle=5
+----
+
+* JPA
+** The RHPAM engine uses JPA for everything persistence related. The JPA provider is Hibernate.
+** The Spring beans for JTA - `EntityManagerFactory, PersistenceUnitManager, JpaVendorAdapter` - are configured in the `com.acme.ride.dispatch.JpaConfiguration` class.
+** Hibernate configuration properties are prefixed with `spring.jpa.properties.hibernate`:
++
+----
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.properties.hibernate.transaction.jta.platform=org.hibernate.service.jta.platform.internal.JBossStandAloneJtaPlatform
+spring.jpa.properties.hibernate.id.new_generator_mappings=false
+spring.jpa.properties.hibernate.hbm2ddl.auto=validate
+spring.jpa.properties.hibernate.show_sql=false
+spring.jpa.properties.hibernate.connection.release_mode=after_statement
+----
+
+* Quartz
+** By default the RHPAM engine uses a `java.util.concurrent.ScheduledThreadPoolExecutor` to schedule timers and jobs, which will not survive an application restart. To use persistent timers, EJB Timers can be used in a JEE environment. In a non JEE environment, Quartz should be used.
+** The Quartz scheduler is automatically created by the RHPAM engine if a system property `org.quartz.properties` is set pointing to a Quartz configuration file. See the `jbpm-quartz.properties` file in the `etc` folder of the source code for the quartz properties file used.
+** `com.acme.ride.dispatch.QuartzConnectionProvider` is a Spring aware datasource connection provider for Quartz.
+
+* RHPAM engine
+** The RHPAM engine is configured in the `com.acme.ride.dispatch.JbpmConfiguration` class.
+** The `RuntimeEnvironment` is of type `DEFAULT_KJAR_CL`, which expects to find the `kmodule.xml` descriptor and the KIE Base assets on the classpath. +
+The `kmodule.xml` descriptor and the dispatch process definition are bundled in the application jar.
+** The `RuntimeManager` uses `PER_PROCESS_INSTANCE` runtime strategy.
+** The `ExecutorService` is enabled by default, and configured with properties prefixed with `jbpm`.
+** WorkItemHandler instances are registered in the `registerableItemsFactory` method.
+** Spring specialized implementations of `org.drools.persistence.api.TransactionManager` and `org.jbpm.shared.services.impl.TransactionalCommandService` are used that can work with a Spring managed transaction manager and entity manger factory.
+
+* JMS: the JMS layer is configured is the same way as in the passenger service. Details can be found in the next paragraph.
+** The JMS Messaglisteners `DriverAssignedEventMessageListener`, `PassengerCanceledEventMessageListener` and `RideEventsMessageListener` interact with the RHPAM engine through the ksession API. This interaction occurs in a transactional context, managed by Spring's `TransactionTemplate`.
++
+----
+    TransactionTemplate template = new TransactionTemplate(transactionManager);
+    template.execute((TransactionStatus s) -> {
+        [...]
+    });
+----
+** When a `RideRequestedEvent` is processed by the `RideEventsMessageListener`, a `Ride` entity is created and persisted in the the database. A dipatch process instance is created with the ride id as correlation key.
+** When the process instance needs to be signaled, the process intance is obtained through its correlation id. This avoids to have to manage process instance ids.
++
+----
+    CorrelationKey correlationKey = correlationKeyFactory.newCorrelationKey(rideId);
+    TransactionTemplate template = new TransactionTemplate(transactionManager);
+    template.execute((TransactionStatus s) -> {
+        RuntimeEngine engine = runtimeManager.getRuntimeEngine(CorrelationKeyContext.get(correlationKey));
+        KieSession ksession = engine.getKieSession();
+        try {
+            ProcessInstance instance = ((CorrelationAwareProcessRuntime) ksession).getProcessInstance(correlationKey);
+            ksession.signalEvent("PassengerCanceled", null, instance.getId());
+            return null;
+        } finally {
+            runtimeManager.disposeRuntimeEngine(engine);
+        }
+            });
+----
+
+* WorkItemHandlers
+** `MessageSenderWorkItemHandler` : sends message to a destination using Spring's `JmsTemplate`. The message type and destination are set by workitem parameters.
+** `UpdateRideWorkItemhandler` : updates the state of the `Ride` entity. The Ride id and status are set by workitem parameters.
 
 === Passenger service - Messaging with Spring Boot
 
@@ -269,9 +405,28 @@ The implementation is very simple. The application exposes a REST endpoint, whic
 
 AMQP messaging on Spring Boot is made easy with the `amqp-10-jms-spring-boot-starter` component. This component provides auto-configuration of a JMS ConnectionFactory using the Qpid JMS AMQP 1.0 client as the underlying transport. The QPID JMS AMQP 1.0 library provides a JMS API on top of the AMQP protocol, which allows to use familiar JMS APIs on top of AMQP. The latest version of the `amqp-10-jms-spring-boot` component has built-in support for JMS resource pooling.
 
-The Spring framework has excellent support for JMS. It provides the `JMsTemplate` to easily send messages and the `@JmsListener` annotation to mark methods as message consumers.
+The Spring framework has excellent support for JMS. It provides the `JmsTemplate` to easily send messages and the `@JmsListener` annotation to mark methods as message consumers.
 
-The `amqp-10-jms-spring-boot` autostarter is configured with properties (`amqphub.amqp10jms.\*` and `amqphub.amqp10jms.pool.\*`). For the use case in the lab some additional configuration is required to support transacted sessions, and shared, durable subscribers. This is done in the `PassengerServiceJmsConfiguration` class, which provides custom configured instances of `JMSTemplate` and `DefaultJmsListenerContainerFactory`:
+The `amqp-10-jms-spring-boot` autostarter confguration properties are prefixed with `amqphub.amqp10jms.` and `amqphub.amqp10jms.pool.`). Spring JMS confiuration properties are prefixed with `spring.jms`:
+
+----
+amqphub.amqp10jms.remote-url=amqps://${amqp.host}:${amqp.port}?${amqp.query}
+amqphub.amqp10jms.username=user
+amqphub.amqp10jms.password=password
+amqphub.amqp10jms.pool.enabled=true
+amqphub.amqp10jms.pool.explicit-producer-cache-size=10
+amqphub.amqp10jms.pool.use-anonymous-producers=false
+
+spring.jms.pub-sub-domain=True
+spring.jms.transacted=True
+spring.jms.subscription-shared=True
+spring.jms.subscription-durable=True
+
+spring.jms.listener.concurrency=20
+spring.jms.listener.max-concurrency=20
+----
+
+For the use case in the lab some additional configuration is required to support transacted sessions, and shared, durable subscribers. This is done in the `PassengerServiceJmsConfiguration` class, which provides custom configured instances of `JMSTemplate` and `DefaultJmsListenerContainerFactory`:
 
 ----
     @Bean
