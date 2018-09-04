@@ -139,7 +139,7 @@ The choice to use two different runtimes was done on purpose to explore how mess
 
 The runtime architecture of the lab looks like:
 
-TODO: insert diagram
+image::images/presentation_runtime_topology.png[]
 
 *Message data model*
 
