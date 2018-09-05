@@ -84,7 +84,7 @@ To keep things simple, the entity is stored in the database schema used by the R
 
 === RHPAM
 
-When it comes to leveraging the RHPAM engine in a microservice, there are several possibilities. We could use the Process Server, but this seems a bit heavy-weight for what we need. In the end, the fact that the Dispatch service uses a process engine should be an implementation detail.
+When it comes to leveraging the RHPAM engine in a microservice, there are several possibilities. We could use the Process Server as is, but Process Server being a general use business process execution server, it seems a bit heavy-weight for what we need. In the end, the fact that the Dispatch service uses a process engine should be an implementation detail. If we use Process Server as such, the API (be it REST or JMS) would leak to client services, which have to know about Process Server specific things like deployment id's, process instance id's, specific payload structures etc...
 
 The RHPAM engine can also be embedded in a stand-alone application. The community provides Spring Boot starters to make that task easier.
 
@@ -133,7 +133,7 @@ In this lab, we use the brokered address space.
 === Service Implementations
 
 The applicaton services use the RHOAR runtimes. The Ride service and Dispatch service are implemented with Spring Boot, the Driver service uses Vert.x. The versions used are aligned to the current release of RHOAR.
-The choice to use two different runtimes was done on purpose to explore how messaging and in particular AMQP can be used on top of these runtimes. It is planned for further iterations of this lab to also use Thorntail (aka WildFly Swarm) and Fuse (Camel on Spring Boot).
+The choice to use two different runtimes was done on purpose to explore how messaging and in particular AMQP can be used on top of these runtimes. It is planned for further iterations of this lab to also leverage Thorntail (aka WildFly Swarm) and Fuse (Camel on Spring Boot).
 
 == Architecture
 
@@ -231,7 +231,7 @@ Note that several other use cases are currently not implemented in the lab:
 
 The process diagram looks like:
 
-image::images/dispatch_process.png[]
+image::images/dispatch_process_2.png[]
 
 * _Signal_ event nodes are used to model the fact that the process is waiting for a certain type of message. When the service receives a message, it finds the relevant process instance, and signals the process. +
 From a conceptual view it would have been more logical to use BPMN _Message_ event nodes rather than signal nodes. However, Message event nodes are broken in the current version of RHPAM (will be fixed in the next release).
@@ -240,16 +240,16 @@ From a conceptual view it would have been more logical to use BPMN _Message_ eve
 +
 image::images/dispatch_process_variables.png[]
 +
-image::images/dispatch_process_timer.png[]
+image::images/dispatch_process_timer_2.png[]
 * The process uses two custom _WorkItemHandlers_.
-** The _Assign Driver_ and _Handle Payment_ nodes use the _SendMessage_ WorkItemHandler. The implementation sends a message of particular type to a particular destination.
+** The _Assign Driver_ and _Handle Payment_ nodes use the _SendMessage_ WorkItemHandler. The implementation sends a message of specified type to the specified destination.
 +
-image::images/dispatch_process_send_message.png[]
+image::images/dispatch_process_send_message_2.png[]
 +
 image::images/dispatch_process_send_message_data_io.png[]
-** The _Ride Request Expired_ node uses the _UpdateRide_ WorkItemHandler, whose implementation updates the status of the Ride entity.
+** The _Ride Request Expired_, _Driver Assigned_, _Ride_Started_, _Ride_Ended_ and _Passenger Canceled_ nodes uses the _UpdateRide_ WorkItemHandler, whose implementation updates the status of the Ride entity.
 +
-image::images/dispatch_process_update_ride.png[]
+image::images/dispatch_process_update_ride_2.png[]
 +
 image::images/dispatch_process_update_ride_data_io.png[]
 
@@ -287,7 +287,7 @@ public class Ride {
 
 The `Ride` entity is stored in the RHPAM database (this is done is this lab to keep things simple). The `Ride` entity is added to the list of persistent classes in `META-INF/jbpm-persistence.xml`.
 
-CRUD operations are done through the `com.acme.ride.dispatch.dao.RideDao` class.
+The `com.acme.ride.dispatch.dao.RideDao` class handles `Ride` entity CRUD operations.
 
 The `rideId` property is used as correlation key when starting an instance of the dispatch service process.
 
