@@ -6,17 +6,26 @@
 
 == Background
 
-TODO
+Microservice architectures are still hot. The idea of breaking up large monolith applications into smaller, focused, independently deployable services is attractive to a lot of our customers. The increased adoption of cloud deployment platforms like OpenShift is an accelerator for the adoption of microservice architectures. The promise of microservice architecture is increased agility and reduced time to market.
 
-* microservices 101
-* orchestration vs choreography
-* need for stateful orchestration
-** https://netflix.github.io/conductor/
-* asynchronous communication in microservices architecture
-* can we do this with Red Hat technology?
-* has to run on OpenShift
+However, the highly distributed nature microservice architectures bring a lot of new challenges on the table.
 
-WARNING: Proof Of Technology!
+As far a communication patterns between microservices is concerned, we can distinguish between synchronous, request/reply communication (typically REST over HTTP) and asynchronous communication (messaging). The latter is used in event-driven architectures, where individual services consume and react on messages (events) sent by other services.
+
+When we talk about the coordination of the communication flows between microservices, we can make a distinction between orchestration and choreography.
+
+In orchestration, an entity - this can be a centralized orchestration engine or an individual microservice - knows how and when to call other services to complete a business functionality. In a choreography, there is no such centralized control, every service knows what to do when invoked.
+
+Microservice architectures promote the choreography model over the orchestration model. This is certainly the case for event-driven architectures. The perceived downside of orchestration is that it leads to tight coupling of the individual microservices, and is less flexible and less easy to change.
+
+However real-life examples of large-scale microservice implementations have shown that pure choreography has its limits in terms of the ability to implement complex business functionality and to have visibility in the state of advancement of the business functionality.
+
+Companies like Netflix and Uber have built and open-sourced specialized microservice orchestration engines (https://netflix.github.io/conductor[Netflix Conductor], https://github.com/uber/cadence[Uber Cadence]) to tackle these limits. https://zeebe.io[Camunda Zeebe] is another example.
+
+Fueled by internal discussions in the Red Hat SME groups, this raised the question whether Red Hat technology - RHPAM in particular - would be suited as an orchestration engine in a event driven microservices architecture. After all, The RHPAM engine is a sophisticated state machine, that can manage (persistent) state and state transitions. And BPMN2 - the process language used by RHPAM - is a rich DSL to describe state transitions. The current lab is a result of experimenting with that idea. Other requirements were the use of asynchronous communication patterns with Red Hat messaging technology (most of the microservices demo's in Red Hat use REST over HTTP), the use of RHOAR runtimes for service implementations and - of course - OpenShift as runtime platform.
+
+It has to be stressed that the lab is merely a Proof of Technology. The goal is to give an answer to the following questions: can RHPAM be used as microservices orchestration engine? How hard is it to do? +
+Whether this is a valuable and recommendable architecture is left to the appreciation of the reader :-).
 
 == Prerequisites
 
