@@ -38,11 +38,25 @@ You will need the following tools on your local machine:
 * Familiarity with Unix command line and terminal based text editors
 * Java - although there is no coding in this lab
 
-*OpenShift environment*
+== OpenShift Environment
 
 An Openshift environment is provided to you to deploy and run the lab's assets.
 
-TODO: OpenShift access details
+Details about the environment are obtained through the Red Hat Tech Exchange _GuidGrabber_.
+
+. In a browser window, navigate to http://bit.ly/rhte-guidgrabber
++
+image::images/guid_grabber_landing_page.png[]
+. From this page select the Lab Code : `A1009`
+. Enter the *Activation Key* provided by the lab proctor.
+. Click `Next`.
+. The resulting page will display your lab’s GUID and other useful information about your lab environment. +
+TODO: GUID Grabber image
+. When you are completely done with your lab environment, please click `Reset Workstation` so that you can move on to the next lab. If you fail to do this, you will be locked into the GUID from the previous lab.
++
+NOTE: Clicking Reset Workstation will not stop or delete the lab environment.
+
+TODO: Lab virtual machine access
 
 == Glossary
 
