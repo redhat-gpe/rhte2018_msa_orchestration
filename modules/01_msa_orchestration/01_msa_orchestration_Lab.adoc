@@ -8,7 +8,7 @@
 
 Microservice architectures are still hot. The idea of breaking up large monolith applications into smaller, focused, independently deployable services is attractive to a lot of our customers. The increased adoption of cloud deployment platforms like OpenShift is an accelerator for the adoption of microservice architectures. The promise of microservice architecture is increased agility and reduced time to market.
 
-However, the highly distributed nature microservice architectures bring a lot of new challenges on the table.
+However, the highly distributed nature of microservice architectures bring a lot of new challenges on the table, as the number and the complexity of the interactions between the microservices increases.
 
 As far a communication patterns between microservices is concerned, we can distinguish between synchronous, request/reply communication (typically REST over HTTP) and asynchronous communication (messaging). The latter is used in event-driven architectures, where individual services consume and react on messages (events) sent by other services.
 
@@ -412,7 +412,7 @@ spring.jpa.properties.hibernate.connection.release_mode=after_statement
 ** The `RuntimeEnvironment` is of type `DEFAULT_KJAR_CL`, which expects to find the `kmodule.xml` descriptor and the KIE Base assets on the classpath. +
 The `kmodule.xml` descriptor and the dispatch process definition are bundled in the application jar.
 ** The `RuntimeManager` uses `PER_PROCESS_INSTANCE` runtime strategy.
-** The `ExecutorService` is enabled by default, and configured with properties prefixed with `jbpm`.
+** The `ExecutorService` is enabled by default, and configured with properties prefixed with `jbpm`. Note that the dispatch process does not use the executor - there are no async nodes in the process.
 ** WorkItemHandler instances are registered in the `registerableItemsFactory` method.
 ** Spring specialized implementations of `org.drools.persistence.api.TransactionManager` and `org.jbpm.shared.services.impl.TransactionalCommandService` are used that can work with a Spring managed transaction manager and entity manger factory.
 
@@ -1785,7 +1785,7 @@ In this lab we will add tracing to the message producers and consumers in the ap
 
 ==== Spring Boot - Dispatch service and Passenger service
 
-The OpenTracing _contrib_ projects contains a large number of libraries providing integration of OpenTracing with a plethora of technologies and frameworks. +
+The OpenTracing _contrib_ project contains a large number of libraries providing integration of OpenTracing with a plethora of technologies and frameworks. +
 Amongst these libraries are `opentracing-jms-2` and `opentracing-jms-spring`. These libraries provide instrumented versions of `javax.jms.MessageProducer` and `javax.jms.MessageListener` which add tracing spans to outgoing and incoming JMS messages. The `opentracing-jms-spring` library integrates with the Spring Boot and Spring JMS components. If these libraries are present on the classpath, the instrumented versions will be used, providing tracing functionality without the need to explicitly add tracing information in the code.
 
 * The tracing information is added as JMS headers to JMS messages
