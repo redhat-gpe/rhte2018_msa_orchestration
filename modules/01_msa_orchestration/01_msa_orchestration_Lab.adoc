@@ -60,12 +60,39 @@ image::images/guid_grabber_landing_page.png[]
 . Enter the *Activation Key* provided by the lab proctor.
 . Click `Next`.
 . The resulting page will display your lab’s GUID and other useful information about your lab environment. +
-TODO: GUID Grabber image
++
+image::images/guid_grabber_details_page.png[]
 . When you are completely done with your lab environment, please click `Reset Workstation` so that you can move on to the next lab. If you fail to do this, you will be locked into the GUID from the previous lab.
 +
 NOTE: Clicking Reset Workstation will not stop or delete the lab environment.
 
-TODO: Lab virtual machine access
+To log in into the OpenShift console:
+
+* Navigate to the URL `https://master.<GUID>.rhte.opentlc.com` - replace `<GUID>` with the lab GUID from the GuidGrabber tool.
+* Login with username `user<lab number>` and the password mentioned in the GuidGrabber tool - replace <lab number> with the lab number from the GuidGrabber tool.
+
+To login with the `oc` client:
+
+* In a terminal, enter the following command:
++
+----
+$ oc login https://master.<GUID>.rhte.opentlc.com -u user<lab number>
+----
+* When prompted, enter the password mentioned in the GuidGrabber tool.
+
+*Lab virtual machine*
+
+There is a virtual machine for this lab that has all the required tools installed. The virtual machine has no GUI, so only command line access is available. Note that you can also use your personal laptop to do the lab, provided you have the required tools installed.
+
+To log into the virtual machine:
+
+* In a terminal, enter the following command:
++
+----
+$ ssh lab-user@clientvm<lab number>.<GUID>.rhte.opentlc.com
+----
+* When prompted `Are you sure you want to continue connecting (yes/no)?`, enter `yes`.
+* When prompted for the password, enter the password mentioned in the GuidGrabber tool.
 
 == Glossary
 
