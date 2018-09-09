@@ -2190,7 +2190,7 @@ global:
 
 scrape_configs:
 ----
-. Review the template for depoyment of Prometheus at `openshift/prometheus/prometheus-template.yaml`.
+. Review the template for deployment of Prometheus at `openshift/prometheus/prometheus-template.yaml`.
 * The template defines a route, a service and a deployment API object. The route allows access to the Prometheus UI web application.
 * By default, the Prometheus UI web application is exposed over port 9090.
 * The Prometheus image runs under the prometheus service account.
@@ -2402,7 +2402,7 @@ Wait until the pipeline is completely executed.
             name: dispatch-service-prometheus-agent
           name: prometheus-agent-config
 ----
-* Replace the depoymentconfig:
+* Replace the deploymentconfig:
 +
 ----
 $ oc delete dc dispatch-service -n $SERVICES_PRJ
