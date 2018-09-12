@@ -1031,6 +1031,8 @@ $ echo "https://$(oc get route jenkins -o jsonpath='{.spec.host}' -n $TOOLS_PRJ)
 ----
 . Wait until the Jenkins pod is up and running. In a browser window, navigate to the  URL of the Jenkins route. Accept the security exception. Log in with your Openshift username and password. The first time you login, you need to authorize the Jenkins service account access to your Openshift profile. Click `Allow selected permissions`. You are redirected to the Jenkins landing page.
 +
+WARNING: In the OpenShift lab environment, which has limited resources, the login to jenkins might take several minutes and can eventually time out. If this is the case, you can skip the next step and safely continue with the remainder of the lab - the deployment of the application services.
++
 image::images/jenkins_login_1.png[]
 +
 image::images/jenkins_login_2.png[]
