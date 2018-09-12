@@ -2073,7 +2073,7 @@ $ git push -u gogs tracing
 +
 ----
 $ oc delete configmap dispatch-service -n $SERVICES_PRJ
-$ oc create configmap dispatch-service --from-file=application.properties -n $SERVICES_PRJ
+$ oc create configmap dispatch-service --from-file=application.properties --from-file=jbpm-quartz.properties -n $SERVICES_PRJ
 ----
 . Modify the build pipeline for the dispatch service to build from the tracing branch.
 . Trigger a new run of the pipeline. The pipeline should complete without errors.
