@@ -690,7 +690,7 @@ You will find here two alternatives to provision EnMasse in the OpenShift enviro
 . Create a project on OpenShift. The project name has to be unique within the OpenShift cluster, so use `enmasse-` suffixed with your name or another unique identifier.
 +
 ----
-$ export $ENMASSE_PRJ=enmasse-<unique suffix>
+$ export ENMASSE_PRJ=enmasse-<unique suffix>
 $ oc new-project $ENMASSE_PRJ
 ----
 * Note the usage of the `ENMASSE_PRJ` environment variable. As long as you stay in the same terminal window, you can reuse the environment variable in other commands. This should make copy-paste from the lab instructions more convenient.
