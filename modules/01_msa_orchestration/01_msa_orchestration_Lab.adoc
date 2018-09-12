@@ -979,6 +979,8 @@ $ echo "http://$(oc get route pgadmin4 -o jsonpath='{.spec.host}' -n $TOOLS_PRJ)
 +
 image::images/pgadmin4_landing_page.png[]
 
+WARNING: We have encountered issues with the pgAdmin4 application running in the lab environment, probably due to DNS issues. This is not critical for the remainder of the lab.
+
 ==== pgAdmin4 Ansible installation
 
 If you have Ansible installed, you can run the Ansible playbook provided in the lab material. The playbook executes the same steps as the manual install.
@@ -1463,6 +1465,45 @@ image::images/pgadmin4_browser.png[]
 image::images/pgadmin4_browser_2.png[]
 * Expect to see the tables of the RHPAM schema. Verify that the list also contains a table `Ride`.
 
+. In the case the pgadmin4 application is not working as expected, you can do the following to check that the `Ride` table has been created:
+* In a terminal window, set the current project to the services project:
++
+----
+$ oc project $SERVICES_PRJ
+----
+* Locate the postgresql pod:
++
+----
+$ POSTGRESQL_POD=$(oc get pods | grep dispatch-service-postgresql  | awk '{print $1}')
+----
+* `oc rsh` into the postgresql pod:
++
+----
+$ oc rsh $POSTGRESQL_POD
+sh-4.2$
+----
+* Open the `psql` tool, and connect to the `rhpam` database and verify that the `Ride` table exists:
++
+----
+sh-4.2$ psql
+psql (9.6.10)
+Type "help" for help.
+
+postgres=# \c rhpam
+You are now connected to database "rhpam" as user "postgres".
+rhpam=# \dt ride
+       List of relations
+ Schema | Name | Type  | Owner
+--------+------+-------+-------
+ public | ride | table | jboss
+(1 row)
+----
++
+Type /q to quit `psql`
++
+----
+rhpam=# \q
+----
 . Create a configmap with the configuration for the dispatch service.
 * In a terminal window, change directory to the folder where you cloned the `dispatch-service` project of the lab material. Change directory to the `etc` folder inside the project.
 * Open the `application.properties` file in a text editor and review its content.
@@ -1646,6 +1687,76 @@ image::images/pgadmin4_select_ride.png[]
 ** correlationkey: the value corresponds to the `rideId` of the `Ride` entity.
 ** status: 2, which corresponds to `COMPLETED`
 
+. In case the pgadmin4 application is not working as expected, you can do the following:
+* In a terminal window, set the current project to the services project:
++
+----
+$ oc project $SERVICES_PRJ
+----
+* Locate the postgresql pod:
++
+----
+$ POSTGRESQL_POD=$(oc get pods | grep dispatch-service-postgresql  | awk '{print $1}')
+----
+* `oc rsh` into the postgresql pod:
++
+----
+$ oc rsh $POSTGRESQL_POD
+sh-4.2$
+----
+* Open the `psql` tool, and connect to the `rhpam` database and issue a query against the `ride` and `processinstancelog` tables:
++
+----
+sh-4.2$ psql
+psql (9.6.10)
+Type "help" for help.
+
+postgres=# \c rhpam
+You are now connected to database "rhpam" as user "postgres".
+rhpam=# \x
+Expanded display is on.
+rhpam=# select * from ride;
+-[ RECORD 1 ]----------------------------------------------------------------------
+id          | 36
+destination | North Carolina Biotechnology Center, Durham, NC 27703
+driverid    | driver198
+passengerid | passenger180
+pickup      | Durham Technical Community College, Durham, NC 27703
+price       | 36.19
+rideid      | ff753046-ddda-466f-b3ff-f6bdeed4ce7d
+status      | 6
+----
++
+----
+rhpam=# select * from processinstancelog;
+
+-[ RECORD 1 ]----------------------------------------------------------------------
+
+id                         | 1
+correlationkey             | e1dca58c-8694-44ae-8651-f90443e11098
+duration                   | 17493
+end_date                   | 2018-09-11 09:03:54.757
+externalid                 | spring-rm
+user_identity              |
+outcome                    |
+parentprocessinstanceid    | -1
+processid                  | acme-ride.dispatch-process
+processinstancedescription | dispatch-process
+processinstanceid          | 1
+processname                | dispatch-process
+processtype                | 1
+processversion             | 1.0
+sla_due_date               |
+slacompliance              | 0
+start_date                 | 2018-09-11 09:03:37.264
+status                     | 2
+----
++
+Type /q to quit `psql`
++
+----
+rhpam=# \q
+----
 . Check the EnMasse console.
 * In a browser window, navigate to the URL of the EnMasse console. The dashboard shows some activity:
 +
@@ -1734,6 +1845,47 @@ $ curl -X POST -H "Content-type: application/json" -d '{"messages": 100, "type":
 As an example, this would be a typical distribution of the state of the `Ride` entity:
 +
 image::images/pgadmin4_count_ride_status_2.png[]
+
+. In case the pgadmin4 application is not working as expected, you can do the following:
+* In a terminal window, set the current project to the services project:
++
+----
+$ oc project $SERVICES_PRJ
+----
+* Locate the postgresql pod:
++
+----
+$ POSTGRESQL_POD=$(oc get pods | grep dispatch-service-postgresql  | awk '{print $1}')
+----
+* `oc rsh` into the postgresql pod:
++
+----
+$ oc rsh $POSTGRESQL_POD
+sh-4.2$
+----
+* Open the `psql` tool, and connect to the `rhpam` database and query the `Ride` table:
++
+----
+sh-4.2$ psql
+psql (9.6.10)
+Type "help" for help.
+
+postgres=# \c rhpam
+You are now connected to database "rhpam" as user "postgres".
+rhpam=# SELECT status, count(1) from ride group by status;
+ status | count
+--------+-------
+      6 |    90
+      4 |     7
+      7 |     6
+(4 rows)
+----
++
+Type /q to quit `psql`
++
+----
+rhpam=# \q
+----
 
 . The dispatch service and the passenger service use shared, durable topic subscriptions. This means they can be scaled up and down without issues.
 * Scale down the dispatch server to 0 pods
