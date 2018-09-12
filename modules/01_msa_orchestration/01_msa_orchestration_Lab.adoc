@@ -1190,7 +1190,7 @@ $ git push -u gogs master
 . Create a project on OpenShift to deploy the services. The project name has to be unique within the OpenShift cluster, so use `services-` suffixed with your name or another unique identifier.
 +
 ----
-$ export $SERVICES_PRJ=services-<unique suffix>
+$ export SERVICES_PRJ=services-<unique suffix>
 $ oc new-project $SERVICES_PRJ
 ----
 . Give the default service account in the project cluster view privileges. This is required because the services use the Kubernetes API to load their configuration configmap.
