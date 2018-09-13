@@ -1440,7 +1440,7 @@ The main difference between the dispatch service and the other services is the u
 
 . Create a configmap for the database initialization scripts.
 * In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
-* Review the scripts in the `openshift/dispatch-service-postgresql/postgresql` directory. These scripts will execute in the init container.
+* Review the scripts in the `openshift/dispatch-service/postgresql` directory. These scripts will execute in the init container.
 ** wait_for_postgresql.sh: script that loops until the PostgreSQL database is up.
 ** create_rhpam_database.sh: executes the sql ddl scripts.
 ** postgresql-jbpm-schema.sql, postgresql-jbpm-schema.sql, quartz_tables_postgres.sql: sql ddl scripts to create the schema for the embedded process engine, including the tables for the quartz scheduler.
@@ -1801,6 +1801,7 @@ This connection represents the `ProducerVerticle` in the driver service.
 image::images/enmasse_console_connections_3.png[]
 +
 This connection is from the passenger service. It shows 10 receivers because we use a pool of 10 message listeners.
++
 * The other connections are from the `ConsumerVerticle` in the driver service and from the message listeners and producer in the dispatch service (3 times 20 listeners).
 
 . Send a command to the REST API of the passenger service to send a `RideRequestedEvent` message of type 2.
