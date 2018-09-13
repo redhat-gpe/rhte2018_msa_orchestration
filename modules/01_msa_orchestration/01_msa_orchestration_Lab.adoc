@@ -1189,7 +1189,7 @@ $ git remote add gogs http://developer:developer123@<url of the driver service r
 $ git checkout master
 $ git push -u gogs master
 ----
-. Repeat for the passenger service and the driver service source code.
+. Repeat for the passenger service and the dispatch service source code.
 
 ==== Driver service installation
 
