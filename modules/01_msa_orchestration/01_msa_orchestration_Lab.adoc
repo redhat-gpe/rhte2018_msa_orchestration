@@ -1260,7 +1260,7 @@ $ oc get secret external-certs-messaging -o jsonpath='{.data.tls\.crt}' -n $ENMA
 Verify the contents of the `messaging-cert.pem` file.
 +
 ----
-$ cat messaging.pem
+$ cat messaging-cert.pem
 ----
 +
 .Sample output
