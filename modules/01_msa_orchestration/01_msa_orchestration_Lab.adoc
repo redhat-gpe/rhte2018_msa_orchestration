@@ -1783,6 +1783,7 @@ image::images/enmasse_console_messages.png[]
 image::images/enmasse_console_addresses_2.png[]
 +
 This matches the non-shared, non-durable consumer from the driver-service
++
 ** The `topic-driver-event` topic, has two durable subscribers:
 +
 image::images/enmasse_console_addresses_3.png[]
@@ -1794,6 +1795,7 @@ image::images/enmasse_console_connections.png[]
 image::images/enmasse_console_connections_2.png[]
 +
 This connection represents the `ProducerVerticle` in the driver service.
++
 * The connection that shows 1 message in, has 1 sender and 10 receivers:
 +
 image::images/enmasse_console_connections_3.png[]
