@@ -373,7 +373,7 @@ narayana.dbcp.defaultAutoCommit=false
 ----
 +
 ----
-narayana.dbcp.max-total=20
+narayana.dbcp.maxTotal=20
 ----
 
 * Datasources:
@@ -1525,7 +1525,7 @@ spring.datasource.username=jboss
 spring.datasource.password=jboss
 spring.datasource.url=jdbc:postgresql://${postgresql.host}:5432/rhpam
 
-narayana.dbcp.max-total=20
+narayana.dbcp.maxTotal=20
 
 amqp.port=5671
 amqp.query=transport.trustAll=false&transport.verifyHost=true
@@ -1562,7 +1562,7 @@ dispatch.assign.driver.expire.duration=5M
 logging.level.org.jbpm.executor.impl=WARN
 logging.level.com.acme.ride=DEBUG
 ----
-* narayana.dbcp.max-total: maximum number of connections in the datasource connection pool managed by the Naryana transaction manager.
+* narayana.dbcp.maxTotal: maximum number of connections in the datasource connection pool managed by the Naryana transaction manager.
 * Set the `amqp.host` property to the hostname of the EnMasse `messaging` service.
 * Set the `postgresql.host` property to the hostname of the PostgreSQL service. +
 As the PostgreSQL database is deployed in the same OpenShift project as the application, you can use the service name: `dispatch-service-postgresql`.
