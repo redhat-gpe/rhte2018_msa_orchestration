@@ -2531,6 +2531,7 @@ $ oc start-build dispatch-service-monitoring-pipeline -n $TOOLS_PRJ
 ----
 +
 Wait until the pipeline is completely executed.
+
 . Replace the deploymentconfig of the dispatch service with a deploymentconfig that configures the Prometheus Java Agent.
 * Review the deploymentconfig template at `openshift/dispatch-service/dispatch-service-tracing-monitoring-template.yaml`. Note the Prometheus Java agent configuration:
 +
