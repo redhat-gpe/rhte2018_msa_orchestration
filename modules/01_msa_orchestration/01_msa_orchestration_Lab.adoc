@@ -2389,7 +2389,6 @@ image::images/enmasse_prometheus_metrics.png[]
 Open the `openshift/prometheus/prometheus.yaml` file in the `installation` project of the lab material in a text editor. Add the following contents to the file. Replace `<enmasse project>` with the name of OpenShift project where you deployed EnMasse.
 +
 ----
-scrape_configs:
 - job_name: 'enmasse'
   kubernetes_sd_configs:
   - role: pod
@@ -2408,6 +2407,39 @@ scrape_configs:
     action: replace
     target_label: kubernetes_namespace
 ----
++
+At this point, the prometheus configuration file should look like:
++
+----
+rule_files:
+  - '*.rules'
+
+# global config
+global:
+  scrape_interval:     30s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 30s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+
+scrape_configs:
+- job_name: 'enmasse'
+  kubernetes_sd_configs:
+  - role: pod
+    namespaces:
+      names:
+      - enmasse-bt
+
+  relabel_configs:
+  - source_labels: [__meta_kubernetes_pod_container_port_name]
+    action: keep
+    regex: artemismetrics.*
+  - source_labels: [__meta_kubernetes_pod_name]
+    action: replace
+    target_label: kubernetes_pod_name
+  - source_labels: [__meta_kubernetes_namespace]
+    action: replace
+    target_label: kubernetes_namespace
+----
++
 * For a detailed overview of the Prometheus configuration settings, refer to the https://prometheus.io/docs/prometheus/latest/configuration/configuration/[Prometheus configuration documentation]
 * `scrape_configs` contains the configuration settings for the scraping jobs.
 * There is one scraping job named `enmasse` with type `kubernetes_sd_configs`.
