@@ -2188,6 +2188,7 @@ jaeger.agent-port=6831
 ----
 +
 Refer to the previous paragraph for details about these settings.
++
 * Set the value of the `amqp.host` property to the hostname of the EnMasse messaging service. Save the file.
 * Delete the current configmap and create a new one from the `application.properties` file.
 +
