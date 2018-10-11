@@ -2501,115 +2501,104 @@ Observe how the message count for the `topic-ride-event` topic drops back to 0.
 
 === Monitor the dispatch service
 
-Spring Boot apps expose MBeans which can be used to monitor the application performance. The Prometheus project provides a Java agent that can be deployed next to the application. The Java agent scans the MBeans, transforms the data they contain to Prometheus format, and exposes them on a HTTP endpoint using a built-in HTTP server on a different port than the application HTTP port (typically 9779). Note that the application container image needs to expose the Prometheus port. The `redhat-openjdk18-openshift` image used by the applications in this lab exposes port 9779.
+Micrometer (https://micrometer.io/) is a monitoring library which provides a simple facade over the instrumentation clients for the most popular monitoring systems, allowing you to instrument your JVM-based application code without vendor lock-in. Think SLF4J, but for metrics. As the default monitoring and instrumenting library for Spring Boot (since version 2.0), it is rapidly gaining popularity in the community.
 
-In this section of the lab we leverage the Prometheus JMX Java agent to obtain metrics from the dispatch service.
+Out of the box, micrometrics will expose system metrics such as cpu and memory consumption, and will also auto-discover application components such as the embedded Tomcat server or datasources. Micrometer also allows to instrument application code to expose application specific metrics.
 
-. In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
-. Create a configmap for the Prometheus Java agent.
+Micrometer comes with a number of exporters, one of these being a Prometheus exporter. Using this exporter allows to expose the metrics as a Prometheus endpoint.
+
+The `micrometer` branch of dispatch service project contains a version of the dispatch service instrumented with Micrometer.
+
+* The following dependencies were added to the project `pom.xml` file:
 +
 ----
-oc create configmap dispatch-service-prometheus-agent --from-file=openshift/dispatch-service/prometheus-agent.yaml -n $SERVICES_PRJ
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-spring-legacy</artifactId>
+      <version>1.0.6</version>
+    </dependency>
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+      <version>1.0.6</version>
+    </dependency>
 ----
 +
-The configuration file looks like:
+** `micrometer-spring-legacy` provides integration between Micrometer and Spring Boot 1.x
+** `micrometer-registry-prometheus` exposes the metrrics collected by Micrometer as Prometheus end point.
+
+* The code of the `RideEventsMessageListener`, `PassengerCanceledEventMessageListener` and `DriverAssignedMessageListener` classes have been instrumented with Micrometer code to measure the time required to process incoming messages.
 +
 ----
----
-lowercaseOutputName: true
-lowercaseOutputLabelNames: true
-blacklistObjectNames: ["Tomcat:*","org.springframework.boot:*","org.springframework.cloud.context.restart:*"]
-----
-* lowercaseOutputName : lowercase the output metric name.
-* lowercaseOutputLabelNames : lowercase the output metric label names
-* blacklistObjectNames : A list of ObjectNames to not query. The dispatch service does not use the embedded Tomcat server except for the health endpoint, so Tomcat metrics are not very useful in our case.
-. When building the image for the dispatch service, the Prometheus Java agent needs to be added to the image. That requires some changes to the build pipeline for the dispatch service, more specifically in the `Build Image` stage.
-+
-----
-            stage ('Build Image') {
-              // make directory for binary upload
-              sh "mkdir -p xfer/prometheus"
-              // cp application binary to xfer
-              sh "cp target/${artifactId}-${version}.jar xfer"
-              // download prometheus jmx agent from maven central
-              sh "curl https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.3.1/jmx_prometheus_javaagent-0.3.1.jar > xfer/prometheus/jmx_prometheus_javaagent.jar"
-              openshift.withCluster() { // Use "default" cluster or fallback to OpenShift cluster detection
-                def bc = openshift.selector("bc", "${app_build}")
-                def builds = bc.startBuild("--from-dir=xfer")
-                timeout (15) {
-                  builds.watch {
-                    if ( it.count() == 0 ) {
-                      return false
-                    }
-                    // Print out the build's name and terminate the watch
-                    echo "Detected new builds created by buildconfig: ${it.names()}"
-                    return true
-                  }
-                  builds.untilEach(1) {
-                    return it.object().status.phase == "Complete"
-                  }
-                }
-              }
+@Component
+public class RideEventsMessageListener {
+
+    @Autowired
+    private MeterRegistry meterRegistry;
+
+[...]
+
+    private Map<String, Timer> timers = new HashMap<>();
+
+    @PostConstruct
+    public void initTimers() {
+        timers.put(TYPE_RIDE_REQUESTED_EVENT, Timer.builder("dispatch-service.message.process").tags("type",TYPE_RIDE_REQUESTED_EVENT).register(meterRegistry));
+        timers.put(TYPE_RIDE_STARTED_EVENT, Timer.builder("dispatch-service.message.process").tags("type",TYPE_RIDE_STARTED_EVENT).register(meterRegistry));
+        timers.put(TYPE_RIDE_ENDED_EVENT, Timer.builder("dispatch-service.message.process").tags("type",TYPE_RIDE_ENDED_EVENT).register(meterRegistry));
+    }
+
+[...]
+
+    private void timedProcessMessage(String messageType, String messageAsJson) {
+        Optional<Timer> timer = Optional.ofNullable(timers.get(messageType));
+        long start = System.currentTimeMillis();
+        try {
+            switch (messageType) {
+                case TYPE_RIDE_REQUESTED_EVENT:
+                    processRideRequestEvent(messageAsJson);
+                    break;
+                case TYPE_RIDE_STARTED_EVENT:
+                    processRideStartedEvent(messageAsJson);
+                    break;
+                case TYPE_RIDE_ENDED_EVENT:
+                    processRideEndedEvent(messageAsJson);
+                    break;
             }
-----
-. Deploy the modified pipeline to OpenShift
-+
-----
-$ oc process -f openshift/dispatch-service/dispatch-service-monitoring-pipeline.yaml -p BC_NAME=dispatch-service-monitoring-pipeline -p GIT_URL=http://gogs:3000 -p GIT_REPO=acme/dispatch-service.git -p APP_BUILD=dispatch-service-binary -p APP_PROJECT=$SERVICES_PRJ -p JENKINS_PROJECT=$TOOLS_PRJ -p APP_IMAGESTREAM=dispatch-service -p APP_DC=dispatch-service | oc create -f - -n $TOOLS_PRJ
-----
-. Start the `dispatch-service-monitoring-pipeline` pipeline.
-+
-----
-$ oc start-build dispatch-service-monitoring-pipeline -n $TOOLS_PRJ
-----
-+
-Wait until the pipeline is completely executed.
+        } finally {
+            timer.ifPresent(t -> t.record(System.currentTimeMillis() - start, TimeUnit.MILLISECONDS));
+        }
+    }
 
-. Replace the deploymentconfig of the dispatch service with a deploymentconfig that configures the Prometheus Java Agent.
-* Review the deploymentconfig template at `openshift/dispatch-service/dispatch-service-tracing-monitoring-template.yaml`. Note the Prometheus Java agent configuration:
+}
+----
+
+In this section of the lab we deploy the instrumented version of the dispatch service and configure prometheus to collect metrics from the application.
+
+. In a terminal window on your workstation, change directory to the directory where you cloned the driver service source code from GitHub.
+Checkout the `micrometer` branch, and push the branch to the gogs repository.
++
+----
+$ git checkout micrometer
+$ git push -u gogs micrometer
+----
+
+. Modify the build pipeline for the dispatch service to build from the micrometer branch.
 +
 ----
 [...]
-        containers:
-        - env:
-          - name: JAVA_OPTIONS
-            value: >
-              -javaagent:/deployments/prometheus/jmx_prometheus_javaagent.jar=9779:/prometheus-agent-config/prometheus-agent.yaml
-              -Djavax.net.ssl.trustStore=/app/truststore/enmasse.jks
-              -Djavax.net.ssl.trustStorePassword=password
-              -Djavax.net.ssl.trustStoreType=JKS
-              -Dorg.quartz.properties=/app/config/jbpm-quartz.properties
+node ('maven-with-pvc') {
+  stage ('Compile') {
+    echo "Starting build"
+    git url: "${git_url}/${git_repo_app}", branch: "micrometer"
 [...]
-          volumeMounts:
-          - mountPath: /app/truststore
-            name: truststore
-          - name: config
-            mountPath: /app/config
-          - name: prometheus-agent-config
-            mountPath: /prometheus-agent-config
-[...]
-        volumes:
-        - secret:
-            defaultMode: 420
-            secretName: ${APPLICATION_TRUSTSTORE}
-          name: truststore
-        - configMap:
-            name: ${APPLICATION_CONFIGMAP}
-          name: config
-        - configMap:
-            name: dispatch-service-prometheus-agent
-          name: prometheus-agent-config
 ----
-* Replace the deploymentconfig:
+
+. Trigger a new run of the pipeline. The pipeline should complete without errors.
+
+. Check that Micrometer metrics are exposed as Prometheus endpoint. +
+In the OpenShift console, navigate to the dispatch service pod, click on the `Terminal` tab and type `curl localhost:8080/prometheus`. Expect to see the metrics exposed by Micrometer in Prometheus format:
 +
-----
-$ oc delete dc dispatch-service -n $SERVICES_PRJ
-$ oc process -f openshift/dispatch-service/dispatch-service-tracing-monitoring-template.yaml -p APPLICATION_NAME=dispatch-service -p APPLICATION_CONFIGMAP=dispatch-service -p APPLICATION_TRUSTSTORE=enmasse-truststore -p JAEGER_COLLECTOR_NAMESPACE=$TOOLS_PRJ | oc create -f - -n $SERVICES_PRJ
-----
-* Check that the Prometheus Java agent is working correctly. +
-In the OpenShift console, navigate to the dispatch service pod, click on the `Terminal` tab and type `curl localhost:9779`. Expect to see the metrics exposed by the application MBeans in Prometheus format:
-+
-image::images/dispatch-service-prometheus-metrics.png[]
+image::images/dispatch-service-prometheus-metrics-2.png[]
 
 . Define a scrape job on Prometheus to scrape the dispatch service metrics. Open the `openshift/prometheus/prometheus.yaml` file in the `installation` project of the lab material in a text editor. Add the following contents to the end of the file. Replace `<services project>` with the name of OpenShift project where you deployed the dispatch service.
 +
@@ -2646,17 +2635,49 @@ image::images/dispatch-service-prometheus-metrics.png[]
 * The `prometheus.io/path` annotation defines the path of the prometheus HTTP endpoint.
 * The `prometheus.io/port` annotation defines the port of the prometheus HTTP endpoint.
 
-. Replace the `prometheus` configmap with the modified file:
+. Prometheus uses rule files to configure recording rules. Recording rules allow to precompute frequently needed or computationally expensive expressions and save their result as a new set of time series. Querying the precomputed result will then often be much faster than executing the original expression every time it is needed.
+* As an example, let’s say you want to monitor the average time required to process a `RiderequestedEvent` message in the dispatch service over a sliding window of 5 minutes. Using the Prometheus PromQL syntax, this can be expressed as:
++
+----
+rate(dispatch_service_message_process_seconds_sum{kubernetes_name="dispatch-service",type="RideRequestedEvent"}[5m])/rate(dispatch_service_message_process_seconds_count{kubernetes_name="dispatch-service",type="RideRequestedEvent"}[5m])
+----
+* Review the recording rules file at `openshift/prometheus/dispatch-service.rules`:
++
+----
+groups:
+- name: dispatch_service_process_message
+  rules:
+  - record: message:riderequested:rate5m
+    expr: rate(dispatch_service_message_process_seconds_sum{kubernetes_name="dispatch-service",type="RideRequestedEvent"}[5m])/rate(dispatch_service_message_process_seconds_count{kubernetes_name="dispatch-service",type="RideRequestedEvent"}[5m])
+  - record: message:ridestarted:rate5m
+    expr: rate(dispatch_service_message_process_seconds_sum{kubernetes_name="dispatch-service",type="RideStartedEvent"}[5m])/rate(dispatch_service_message_process_seconds_count{kubernetes_name="dispatch-service",type="RideStartedEvent"}[5m])
+  - record: message:rideended:rate5m
+    expr: rate(dispatch_service_message_process_seconds_sum{kubernetes_name="dispatch-service",type="RideEndedEvent"}[5m])/rate(dispatch_service_message_process_seconds_count{kubernetes_name="dispatch-service",type="RideEndedEvent"}[5m])
+  - record: message:driverassigned:rate5m
+    expr: rate(dispatch_service_message_process_seconds_sum{kubernetes_name="dispatch-service",type="DriverAssignedEvent"}[5m])/rate(dispatch_service_message_process_seconds_count{kubernetes_name="dispatch-service",type="DriverAssignedEvent"}[5m])
+  - record: message:passengercanceled:rate5m
+    expr: rate(dispatch_service_message_process_seconds_sum{kubernetes_name="dispatch-service",type="PassengerCanceledEvent"}[5m])/rate(dispatch_service_message_process_seconds_count{kubernetes_name="dispatch-service",type="PassengerCanceledEvent"}[5m])
+- name: dispatch_service_jvm
+  rules:
+  - record: jvm:heap:max
+    expr: sum(jvm_memory_max_bytes{area="heap",kubernetes_name="dispatch-service"}) by (pod_name)
+  - record: jvm:heap:used
+    expr: sum(jvm_memory_used_bytes{area="heap",kubernetes_name="dispatch-service"}) by (pod_name)
+----
+
+. Replace the `prometheus` configmap with the modified `prometheus.yaml` and the `dispatch-service.rules` file:
 +
 ----
 $ oc delete configmap prometheus -n $TOOLS_PRJ
-$ oc create configmap prometheus --from-file=openshift/prometheus/prometheus.yaml -n $TOOLS_PRJ
+$ oc create configmap prometheus --from-file=openshift/prometheus/prometheus.yaml --from-file=openshift/prometheus/dispatch-service.rules -n $TOOLS_PRJ
 ----
+
 . Patch the `dispatch-service` service to add the required annotations for the Prometheus scraping job:
 +
 ----
-$ oc patch service dispatch-service -p '{"metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"9779","prometheus.io/scrape":"true"}}}' -n $SERVICES_PRJ
+$ oc patch service dispatch-service -p '{"metadata":{"annotations":{"prometheus.io/path":"/prometheus","prometheus.io/port":"8080","prometheus.io/scrape":"true"}}}' -n $SERVICES_PRJ
 ----
+
 . Scale the Prometheus pod up and down to force a restart of the Prometheus pod:
 +
 ----
@@ -2665,13 +2686,30 @@ $ oc scale deployment prometheus --replicas=0 -n $TOOLS_PRJ && oc scale deployme
 . In a browser window, navigate to the Prometheus UI. Go to `Status -> Targets`. Expect to see the dispatch service target:
 +
 image::images/prometheus_target_1.png[]
-. On the Prometheus landing page, open the metric drop-down box to see an overview of the metrics exposed by the EnMasse broker and the dispatch service. Note that the dispatch service exposes metrics pertaining to the datasource connection pools (metrics starting with `org_apache_commons_dbcp2`)
+
+. On the Prometheus landing page, open the metric drop-down box to see an overview of the metrics exposed by the EnMasse broker and the dispatch service. Note that the dispatch service exposes metrics pertaining to the datasource connection pools (metrics starting with `xa_connections` and `nonXa_connections`)
+
+. In the Prometheus UI, navigate to `Status -> Rules`. Expect to see the rules defined in the `dispatch-service.rules` file:
++
+image::images/prometheus_rules-2.png[]
+
+. In the Rules view click on one of the rules, for example `message:riderequested:rate5m`. The rule expression is copied into the metric box in the landing page and executed.
++
+image::images/prometheus_metrics_6.png[]
+. Put some load on the system:
++
+----
+$ curl -X POST -H "Content-type: application/json" -d '{"messages": 500, "type": 0}' $PASSENGER_SERVICE_URL/simulate
+----
+. Observe the graph of the `message:riderequested:rate5m` metrics - you need to click `Execute` to refresh the graph:
++
+image::images/prometheus_graph_7.png[]
 
 === SQL metrics
 
 https://github.com/chop-dbhi/prometheus-sql[Prometheus SQL] is a service that generates basic metrics for SQL result sets and exposes them as Prometheus metrics. It executes SQL queries at a regular interval and exposes the resultset as Prometheus compatible time series metrics.
 
-In this section of the lab, we leverage Prometheus SQL to measure the rate of `Ride` entities per status, as well as the rate of process instances created.
+In this section of the lab, we leverage Prometheus SQL to measure the number of `Ride` entities per status over a sliding time window, as well as the rate of process instances created.
 
 . In a terminal, change directory to the folder where you cloned the `installation` project of the lab material.
 . Review the Prometheus SQL configuration file at `openshift/prometheus-sql/prometheus-sql.yml`. The configuration defines the database(s) to connect to:
@@ -2772,11 +2810,11 @@ Registering metric ride_created{"processname":"dispatch-process"}
 ----
 rate(query_result_ride_created{processname="dispatch-process"}[5m])
 ----
-* Review the recording rules file at `openshift/prometheus/dispatch-service.rules`:
+* Review the recording rules file at `openshift/prometheus/dispatch-service-sql.rules`:
 +
 ----
 groups:
-- name: dispatch_service
+- name: dispatch_service_ride_status
   rules:
   - record: ride:requested:rate5m
     expr: rate(query_result_ride_per_state{state="1"}[5m])
@@ -2793,11 +2831,11 @@ groups:
   - record: ride:created:rate5m
     expr: rate(query_result_ride_created{processname="dispatch-process"}[5m])
 ----
-. Replace the `prometheus` configmap with the modified `prometheus.yaml` and the `dispatch-service.rules` file:
+. Replace the `prometheus` configmap with the modified `prometheus.yaml` and the `dispatch-service.rules` and `dispatch-service-sql.rules` files:
 +
 ----
 $ oc delete configmap prometheus -n $TOOLS_PRJ
-$ oc create configmap prometheus --from-file=openshift/prometheus/prometheus.yaml --from-file=openshift/prometheus/dispatch-service.rules -n $TOOLS_PRJ
+$ oc create configmap prometheus --from-file=openshift/prometheus/prometheus.yaml --from-file=openshift/prometheus/dispatch-service.rules --from-file=openshift/prometheus/dispatch-service-sql.rules -n $TOOLS_PRJ
 ----
 . Scale the Prometheus pod up and down to force a restart of the Prometheus pod:
 +
@@ -2807,7 +2845,7 @@ $ oc scale deployment prometheus --replicas=0 -n $TOOLS_PRJ && oc scale deployme
 . In a browser window, navigate to the Prometheus UI. Go to `Status -> Targets`. Expect to see the `dispatch-service-pgsql` target:
 +
 image::images/prometheus_target_2.png[]
-. In the Prometheus UI, navigate to `Status -> Rules`. Expect to see the rules defined in the `dispatch-service.rules` file:
+. In the Prometheus UI, navigate to `Status -> Rules`. Expect to see the rules defined in the `dispatch-service-sql.rules` file:
 +
 image::images/prometheus_rules.png[]
 . In the Rules view click on one of the rules, for example `ride:created:5m`. The rule expression is copied into the metric box in the landing page and executed.
@@ -2878,7 +2916,7 @@ Repeat for the other topics.
 +
 image::images/grafana_graph_3.png[]
 . Give a title to the graph in the `General` pane, and close the edit section.
-. Create dashboard panes for metrics you are interested in. Suggested metrics are: the number of active connections in the datasource pools of the dispatch service (metrics start with `org_apache_commons_dbcp2`), JVM CPU and memory consumption for the dispatch service, The SQL metrics obtained from the dispatch service database.
+. Create dashboard panes for metrics you are interested in. Suggested metrics are: the number of active connections in the datasource pools of the dispatch service (metrics start with `xa_connections` and `nonXa_connections`), JVM CPU and memory consumption for the dispatch service, the execution time for the processing of messages in the dispatch service, and the SQL metrics obtained from the dispatch service database.
 +
 image::images/grafana_graph_4.png[]
 . Put some load on the system to generate data for the dashboard. If you have SoapUI installed on you system, the `soapui` project in the lab material has a SoapUI load test project.
