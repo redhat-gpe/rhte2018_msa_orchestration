@@ -4,6 +4,29 @@
 
 = RHTE 2018 Microservices Orchestration Lab
 
+.Prerequisites
+
+*Tools*
+
+You will need the following tools on your local machine:
+
+* `oc` CLI tool, version 3.9
+* `git`
+* java JDK 1.8
+* `openssl`
+* a text editor like Atom, or Sublime Text (optional)
+* Ansible version 2.6.x (optional)
+* SoapUI version 5.4.0 (optional)
+
+*Skills*
+
+* OpenShift Basics, familiarity with `oc` CLI tool and the OpenShift web console
+* Familiarity with Unix command line and terminal based text editors
+* Java - although there is no coding in this lab
+
+:numbered:
+
+
 == Background
 
 Microservice architectures are still hot. The idea of breaking up large monolith applications into smaller, focused, independently deployable services is attractive to a lot of our customers. The increased adoption of cloud deployment platforms like OpenShift is an accelerator for the adoption of microservice architectures. The promise of microservice architecture is increased agility and reduced time to market.
@@ -27,31 +50,51 @@ Fueled by internal discussions in the Red Hat SME groups, this raised the questi
 It has to be stressed that the lab is merely a Proof of Technology. The goal is to give an answer to the following questions: can RHPAM be used as microservices orchestration engine? How hard is it to do? +
 Whether this is a valuable and recommendable architecture is left to the appreciation of the reader :-).
 
-== Prerequisites
 
-*Tools*
 
-You will need the following tools on your local machine:
+== Course Virtual Machine
+Your lab environment consists of a remote virtual machine that is dedicated to you and is pre-installed with OpenShift.
+The virtual machine has no GUI, so only command line access is available.
+Note that you can also use your personal laptop to do the lab, provided you have the required tools installed and sufficient hardware resources; in particular at least 24GB RAM and 8 CPU dedicated to this lab.
 
-* `oc` CLI tool, version 3.9
-* `git`
-* java JDK 1.8
-* `openssl`
-* a text editor like Atom, or Sublime Text (optional)
-* Ansible version 2.6.x (optional)
-* SoapUI version 5.4.0 (optional)
+=== Order VM
+This section guides you through the procedure to order a course virtual machine.
 
-*Skills*
+There are three options for doing so. [red]#Execute only one of the options below:#
 
-* OpenShift Basics, familiarity with `oc` CLI tool and the OpenShift web console
-* Familiarity with Unix command line and terminal based text editors
-* Java - although there is no coding in this lab
+==== Access VM via RHPDS
 
-== OpenShift Environment
+NOTE: [blue]#This section is only applicable if your desire is to utilize a lab environment in Red Hat's _Partner Demo System_ (RHPDS)#.
 
-An Openshift environment is provided to you to deploy and run the lab's assets.
+. Begin by navigating to the _Cloud Forms_ environment for Red Hat Partner Demo System at:   https://rhpds.redhat.com
+. Authenticate using your _OPENTLC_ credentials (ie:  johndoe-redhat.com )
+. Navigate to the following catalog:  `Services -> Catalog -> All Services -> Red Hat Tech Exchange 2018`
+. Select the following catalog item: `MSA Orchestration using PAM 7`
++
+image::images/rhpds_catalog.png[]
+. Click the `Order` button and in the following page, click the checkbox to confirm that you understand and know your runtime and expiration dates.
+. Click `Submit`
 
-Details about the environment are obtained through the Red Hat Tech Exchange _GuidGrabber_.
+==== Access VM via OPENTLC or RHSE
+
+NOTE: [blue]#This section is applicable if you are an existing student of either Red Hat's _Open Partner Enablement Network (OPEN)_ or Skills Exchange (RHSE) programs.#
+
+. Begin by navigating to the _Cloud Forms_ environment for both OPEN and RHSE at:   https://labs.opentlc.com
+. Authenticate using your _OPENTLC_ credentials (ie:  johndoe-redhat.com )
+. Navigate to the following catalog:  `Services -> Catalog -> Catalog Items -> OPENTLC Middleware Solutions Labs`
+. Select the following catalog item: `MSA Orchestration using PAM 7`
++
+image::images/catalog_item.png[]
+. Click `Order` at the top of the next page
+
+. In the subsequent order form, select the following:
+.. *OpenShift Container Platform version:* `3.10.34`
+.. *Region*: select the region you currently reside in
+.. Click `Submit` at the top of the page
+
+==== Access VM via `GUID Grabber`
+
+NOTE: [blue]#This section is only applicable if you are a participant in a Red Hat conferance such as Red Hat Tech Exchange (RHTE)#.
 
 . In a browser window, navigate to http://bit.ly/rhte-guidgrabber
 +
@@ -80,19 +123,59 @@ $ oc login https://master.<GUID>.rhte.opentlc.com -u user<lab number>
 ----
 * When prompted, enter the password mentioned in the GuidGrabber tool.
 
-*Lab virtual machine*
+=== Confirmation Emails and SSH access
 
-There is a virtual machine for this lab that has all the required tools installed. The virtual machine has no GUI, so only command line access is available. Note that you can also use your personal laptop to do the lab, provided you have the required tools installed.
-
-To log into the virtual machine:
-
-* In a terminal, enter the following command:
+. Upon ordering your VM, you will receive several emails confirming your order.
+These emails are sent to the email associated with your OPENTLC account.
 +
-----
-$ ssh lab-user@clientvm<lab number>.<GUID>.rhte.opentlc.com
-----
-* When prompted `Are you sure you want to continue connecting (yes/no)?`, enter `yes`.
-* When prompted for the password, enter the password mentioned in the GuidGrabber tool.
+The most important email is the last one which indicates completion of the provisioning of your lab environment.
+This email arrive approximately 30 minutes from the time the lab was ordered.
+[blue]#Please save this email#.
+
+. SSH access to your VM
+.. The confirmation email will provide exact details as to how to ssh into your remote lab environment.
+.. Execute the steps outlined in the email to gain access to your lab environment.
+
+=== OpenShift Container Platform
+
+Your lab environment is built on Red Hat's OpenShift Container Platform.
+
+Access to your OCP resources can be gained via both the `oc` utility as well as the OCP web console.
+
+. Verify that OCP has started:
++
+-----
+$ sudo systemctl status oc-cluster
+
+...
+
+Aug 31 21:58:27 clientvm.a4f6.rhte.opentlc.com occlusterup[20544]: Server Information ...
+Aug 31 21:58:27 clientvm.a4f6.rhte.opentlc.com occlusterup[20544]: OpenShift server started.
+Aug 31 21:58:27 clientvm.a4f6.rhte.opentlc.com occlusterup[20544]: The server is accessible via web console at:
+Aug 31 21:58:27 clientvm.a4f6.rhte.opentlc.com occlusterup[20544]: https://clientvm.a4f6.rhte.opentlc.com:8443
+Aug 31 21:58:27 clientvm.a4f6.rhte.opentlc.com occlusterup[20544]: You are logged in as:
+Aug 31 21:58:27 clientvm.a4f6.rhte.opentlc.com occlusterup[20544]: User:     developer
+Aug 31 21:58:27 clientvm.a4f6.rhte.opentlc.com occlusterup[20544]: Password: <any value>
+Aug 31 21:58:27 clientvm.a4f6.rhte.opentlc.com occlusterup[20544]: To login as administrator:
+Aug 31 21:58:27 clientvm.a4f6.rhte.opentlc.com occlusterup[20544]: oc login -u system:admin
+Aug 31 21:58:27 clientvm.a4f6.rhte.opentlc.com systemd[1]: Started OpenShift oc cluster up Service.
+-----
+
+. Using the `oc` utility, log into OpenShift
++
+-----
+$ oc login https://$HOSTNAME:8443 -u developer -p developer
+-----
+
+. Log into OpenShift Web Console
+.. Many OpenShift related tasks found in this lab can be completed in the Web Console (as an alternative to using the `oc` utility.
+.. To access the OCP web console, point to your browser to the output of the following:
++
+-----
+$ echo -en "\n\nhttps://$OCP_DOMAIN:8443\n\n"
+-----
++
+Authenticate using the same credentials used previously with the `oc` utility:  developer/developer.
 
 == Glossary
 
